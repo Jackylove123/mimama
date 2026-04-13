@@ -1,0 +1,79 @@
+.page {
+  min-height: 100vh;
+  background: #f6f8fa;
+  padding: 24rpx 24rpx calc(120rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.card {
+  background: #ffffff;
+  border: 1rpx solid #e3e8ef;
+  border-radius: 18rpx;
+  padding: 22rpx;
+}
+
+.label {
+  margin-top: 18rpx;
+  margin-bottom: 8rpx;
+  font-size: 24rpx;
+  color: #64748b;
+}
+
+.input {
+  height: 72rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #e3e8ef;
+  padding: 0 14rpx;
+  font-size: 28rpx;
+  color: #0f172a;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 140rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #e3e8ef;
+  padding: 14rpx;
+  box-sizing: border-box;
+  font-size: 26rpx;
+  color: #0f172a;
+}
+
+.small-btn {
+  margin-top: 10rpx;
+  margin-bottom: 8rpx;
+  width: 220rpx;
+  height: 60rpx;
+  border-radius: 12rpx;
+  background: rgba(23, 107, 135, 0.08);
+  color: #176b87;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24rpx;
+}
+
+.switch-row {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  color: #0f172a;
+}
+
+.save-btn {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  height: 86rpx;
+  border-radius: 18rpx;
+  background: #176b87;
+  color: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30rpx;
+  font-weight: 600;
+}

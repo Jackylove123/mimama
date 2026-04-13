@@ -1,0 +1,55 @@
+{
+  "pages": [
+    "pages/pin/index",
+    "pages/vault/index",
+    "pages/search/index",
+    "pages/favorites/index",
+    "pages/mine/index",
+    "pages/detail/index",
+    "pages/edit/index",
+    "pages/index/index",
+    "pages/logs/logs"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "密麻麻",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#F6F8FA",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#64748B",
+    "selectedColor": "#176B87",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/vault/index",
+        "text": "保险库",
+        "iconPath": "assets/tab/icon.png",
+        "selectedIconPath": "assets/tab/icon-active.png"
+      },
+      {
+        "pagePath": "pages/search/index",
+        "text": "搜索",
+        "iconPath": "assets/tab/icon.png",
+        "selectedIconPath": "assets/tab/icon-active.png"
+      },
+      {
+        "pagePath": "pages/favorites/index",
+        "text": "常用",
+        "iconPath": "assets/tab/icon.png",
+        "selectedIconPath": "assets/tab/icon-active.png"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的",
+        "iconPath": "assets/tab/icon.png",
+        "selectedIconPath": "assets/tab/icon-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "lazyCodeLoading": "requiredComponents"
+}

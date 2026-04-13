@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="card">
+    <view class="title">v0.1 当前状态</view>
+    <view class="item">存储模式：<text class="value">{{storageMode === 'local' ? '本地存储' : '云存储'}}</text></view>
+    <view class="item">总记录：<text class="value">{{total}}</text></view>
+    <view class="item">收藏：<text class="value">{{favorite}}</text></view>
+    <view class="item">今日更新：<text class="value">{{updatedToday}}</text></view>
+    <view class="hint">{{cloudHint}}</view>
+  </view>
+
+  <view class="card">
+    <view class="title">快捷操作</view>
+    <view class="button" bindtap="onTapAdd">新增密码</view>
+    <view class="button" bindtap="onTapExport">导出 JSON（复制到剪贴板）</view>
+    <view class="button ghost" bindtap="onResetDemo">重置示例数据</view>
+  </view>
+
+  <view class="card">
+    <view class="title">导入 JSON</view>
+    <textarea
+      class="textarea"
+      placeholder="粘贴导出的 JSON 内容"
+      value="{{importText}}"
+      bindinput="onImportInput"
+    />
+    <view class="row">
+      <view class="half" bindtap="onImportAppend">追加导入</view>
+      <view class="half" bindtap="onImportReplace">覆盖导入</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="card">
+    <view class="title">{{title}}</view>
+    <view class="tips">{{tips}}</view>
+
+    <view class="dots">
+      <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < digits.length ? 'filled' : ''}}"></view>
+    </view>
+
+    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中，请 {{cooldownSeconds}} 秒后重试</view>
+  </view>
+
+  <view class="keypad">
+    <view wx:for="{{keypadRows}}" wx:key="index" class="row">
+      <view
+        wx:for="{{item}}"
+        wx:key="*this"
+        class="key {{item === '' ? 'empty' : ''}}"
+        data-key="{{item}}"
+        bindtap="onTapKey"
+      >
+        <text wx:if="{{item === 'del'}}">删除</text>
+        <text wx:elif="{{item}}">{{item}}</text>
+      </view>
+    </view>
+  </view>
+</view>

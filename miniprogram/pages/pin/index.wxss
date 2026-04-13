@@ -1,0 +1,77 @@
+.page {
+  min-height: 100vh;
+  padding: 48rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  background: #f6f8fa;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 44rpx 36rpx;
+  box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.06);
+}
+
+.title {
+  font-size: 40rpx;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.tips {
+  margin-top: 12rpx;
+  color: #475569;
+  font-size: 26rpx;
+}
+
+.dots {
+  margin-top: 40rpx;
+  display: flex;
+  justify-content: space-between;
+}
+
+.dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  border: 2rpx solid #94a3b8;
+  background: transparent;
+}
+
+.dot.filled {
+  border-color: #176b87;
+  background: #176b87;
+}
+
+.cooldown {
+  margin-top: 20rpx;
+  color: #dc2626;
+  font-size: 24rpx;
+}
+
+.keypad {
+  margin-top: 48rpx;
+}
+
+.row {
+  display: flex;
+  margin-bottom: 20rpx;
+}
+
+.key {
+  flex: 1;
+  margin: 0 10rpx;
+  height: 92rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  border: 1rpx solid #e3e8ef;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #0f172a;
+  font-size: 32rpx;
+}
+
+.key.empty {
+  opacity: 0;
+}

@@ -1,0 +1,128 @@
+.page {
+  min-height: 100vh;
+  background: #f6f8fa;
+  padding: 24rpx 24rpx calc(120rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.search {
+  height: 76rpx;
+  border-radius: 38rpx;
+  padding: 0 24rpx;
+  background: #ffffff;
+  border: 1rpx solid #e3e8ef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.search-placeholder {
+  color: #94a3b8;
+  font-size: 26rpx;
+}
+
+.search-action {
+  color: #176b87;
+  font-size: 26rpx;
+}
+
+.tabs {
+  margin-top: 20rpx;
+  display: flex;
+  border-bottom: 1rpx solid #e3e8ef;
+}
+
+.tab {
+  margin-right: 36rpx;
+  padding: 18rpx 4rpx;
+  color: #64748b;
+  font-size: 28rpx;
+}
+
+.tab.active {
+  color: #176b87;
+  border-bottom: 4rpx solid #176b87;
+  font-weight: 600;
+}
+
+.list {
+  margin-top: 20rpx;
+}
+
+.card {
+  margin-bottom: 16rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 1rpx solid #e3e8ef;
+  padding: 18rpx;
+  display: flex;
+}
+
+.avatar {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 16rpx;
+  background: #176b87;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+}
+
+.main {
+  margin-left: 16rpx;
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.title {
+  color: #0f172a;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.fav {
+  margin-left: 8rpx;
+  color: #f59e0b;
+  font-size: 28rpx;
+}
+
+.account {
+  margin-top: 8rpx;
+  color: #475569;
+  font-size: 26rpx;
+}
+
+.meta {
+  margin-top: 6rpx;
+  color: #94a3b8;
+  font-size: 24rpx;
+}
+
+.hint {
+  margin-top: 80rpx;
+  text-align: center;
+  color: #64748b;
+  font-size: 26rpx;
+}
+
+.fab {
+  position: fixed;
+  right: 30rpx;
+  bottom: calc(32rpx + env(safe-area-inset-bottom));
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: #176b87;
+  color: #ffffff;
+  font-size: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 24rpx rgba(23, 107, 135, 0.35);
+}

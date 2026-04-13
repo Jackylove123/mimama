@@ -1,0 +1,65 @@
+<view class="page">
+  <view class="header">
+    <view class="title">{{title}}</view>
+    <view class="star" bindtap="onToggleFavorite">{{isFavorite ? '★ 已收藏' : '☆ 收藏'}}</view>
+  </view>
+
+  <view class="card">
+    <view class="label">账号</view>
+    <view class="value">{{account}}</view>
+    <view class="small-btn" bindtap="onTapCopyAccount">点击复制</view>
+  </view>
+
+  <view class="card">
+    <view class="label">密码</view>
+    <view class="value">{{passwordVisible ? password : maskedPassword}}</view>
+    <view class="row-btn">
+      <view class="small-btn" bindtap="onTapTogglePassword">{{passwordVisible ? '重新掩码' : '显示 10 秒'}}</view>
+      <view class="small-btn" bindtap="onTapCopyPassword">复制密码</view>
+    </view>
+  </view>
+
+  <view wx:if="{{website}}" class="card meta">
+    <view class="label">网站</view>
+    <view class="value">{{website}}</view>
+  </view>
+
+  <view wx:if="{{note}}" class="card meta">
+    <view class="label">备注</view>
+    <view class="value">{{note}}</view>
+  </view>
+
+  <view class="action-row">
+    <view class="ghost" bindtap="onTapEdit">编辑</view>
+    <view class="danger" bindtap="onTapDelete">删除</view>
+  </view>
+
+  <view class="bottom-btn" bindtap="onTapCopyAndExit">复制并退出</view>
+
+  <view wx:if="{{showSensitivePinSheet}}" class="overlay" catchtap="noop">
+    <view class="sheet">
+      <view class="sheet-title">请输入 PIN 进行敏感操作</view>
+      <view class="dots">
+        <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < sensitiveDigits.length ? 'filled' : ''}}"></view>
+      </view>
+      <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中 {{cooldownSeconds}} 秒</view>
+
+      <view class="keypad">
+        <view wx:for="{{keypadRows}}" wx:key="index" class="row">
+          <view
+            wx:for="{{item}}"
+            wx:key="*this"
+            class="key {{item === '' ? 'empty' : ''}}"
+            data-key="{{item}}"
+            bindtap="onTapSensitiveKey"
+          >
+            <text wx:if="{{item === 'del'}}">删除</text>
+            <text wx:elif="{{item}}">{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="sheet-cancel" bindtap="onTapSensitiveClose">取消</view>
+    </view>
+  </view>
+</view>
