@@ -1,166 +1,469 @@
-import { CLOUD_READY_HINT } from '../../services/runtime-config'
 import { getVaultRepository } from '../../services/vault-repository'
+import { clearSession, lockCountdownSeconds, verifyPin } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
-import type { VaultExportPayload, VaultItem } from '../../types/vault'
 
-const app = getApp<IAppOption>()
-const repository = getVaultRepository(app.globalData.storageMode)
+type SensitiveAction = 'export' | 'wipe' | ''
+type DialogState = {
+  visible: boolean
+  title: string
+  content: string
+  showCancel: boolean
+  maskClosable: boolean
+  cancelText: string
+  confirmText: string
+  danger: boolean
+}
+
+interface LayoutWindowInfo {
+  statusBarHeight?: number
+  windowHeight: number
+  safeArea?: {
+    bottom: number
+  }
+}
+
+interface ShareFileMessageOptions {
+  filePath: string
+  fileName?: string
+  success?: () => void
+  fail?: (error: unknown) => void
+}
+
+type ShareResult = 'shared' | 'cancelled' | 'unavailable' | 'failed'
+
+const repository = getVaultRepository()
+
+let lockTimer: number | undefined
+let dialogResolver: ((confirmed: boolean) => void) | undefined
+
+const createDialogState = (): DialogState => ({
+  visible: false,
+  title: '',
+  content: '',
+  showCancel: true,
+  maskClosable: false,
+  cancelText: '取消',
+  confirmText: '确定',
+  danger: false,
+})
 
 Page({
   data: {
-    storageMode: app.globalData.storageMode,
-    cloudHint: CLOUD_READY_HINT,
-    total: 0,
-    favorite: 0,
-    updatedToday: 0,
-    importText: '',
+    recordCount: 0,
+    recycleCount: 0,
+    importing: false,
+    showPinSheet: false,
+    pinDigits: '',
+    pendingAction: '' as SensitiveAction,
+    cooldownSeconds: 0,
+    pinSlots: [0, 1, 2, 3, 4, 5],
+    keypadRows: [
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['', '0', 'del'],
+    ],
+    dialog: createDialogState(),
+    navHeightPx: 32,
+    pagePaddingTopPx: 88,
+  },
+
+  onLoad() {
+    this.applyAdaptiveLayout()
   },
 
   onShow() {
+    this.applyAdaptiveLayout()
     if (!ensureUnlocked('/pages/mine/index')) {
       return
     }
 
-    this.loadStats()
+    this.refreshCooldown()
+    this.loadStatus()
+
+    const pending = wx.getStorageSync('mimama.pendingAction')
+    if (pending === 'export') {
+      wx.removeStorageSync('mimama.pendingAction')
+      this.requestSensitive('export')
+    }
   },
 
-  onImportInput(event: WechatMiniprogram.CustomEvent) {
-    this.setData({
-      importText: event.detail.value as string,
-    })
+  onUnload() {
+    if (lockTimer) {
+      clearInterval(lockTimer)
+      lockTimer = undefined
+    }
+    if (dialogResolver) {
+      dialogResolver(false)
+      dialogResolver = undefined
+    }
   },
 
-  async onTapExport() {
-    const payload = await repository.exportPayload()
-    const text = JSON.stringify(payload, null, 2)
-
-    wx.setClipboardData({
-      data: text,
-      success: () => {
-        wx.showModal({
-          title: '导出成功',
-          content: '数据 JSON 已复制到剪贴板（0.1 版本不做广告拦截，可直接导出）。',
-          showCancel: false,
-        })
-      },
-    })
-  },
-
-  async onImportAppend() {
-    this.importData('append')
-  },
-
-  async onImportReplace() {
-    this.importData('replace')
-  },
-
-  onTapAdd() {
+  onTapChangePasscode() {
     wx.navigateTo({
-      url: '/pages/edit/index',
+      url: '/pages/passcode/index',
     })
   },
 
-  async onResetDemo() {
-    await repository.importPayload(
-      {
-        version: '0.1',
-        exportedAt: Date.now(),
-        storageMode: app.globalData.storageMode,
-        items: [],
-      },
-      'replace',
-    )
-
-    await repository.ensureSeedData()
-    this.loadStats()
-
-    wx.showToast({
-      title: '已重置示例数据',
-      icon: 'none',
+  onTapAbout() {
+    wx.navigateTo({
+      url: '/pages/about/index',
     })
   },
 
-  async loadStats() {
-    const stats = await repository.getStats()
-    this.setData({
-      total: stats.total,
-      favorite: stats.favorite,
-      updatedToday: stats.updatedToday,
+  onTapRecycle() {
+    wx.navigateTo({
+      url: '/pages/recycle/index',
     })
   },
 
-  async importData(mode: 'append' | 'replace') {
-    const text = this.data.importText.trim()
-    if (!text) {
-      wx.showToast({
-        title: '请先粘贴导入内容',
-        icon: 'none',
-      })
+  onTapExport() {
+    this.requestSensitive('export')
+  },
+
+  async onTapImport() {
+    if (this.data.importing) {
       return
     }
 
+    this.setData({ importing: true })
+
     try {
-      const parsed = JSON.parse(text) as unknown
-      if (!isExportPayload(parsed)) {
+      const picked = await pickTxtFile()
+      if (!picked) {
+        return
+      }
+
+      const result = await repository.importTxt(picked.path)
+      await this.openDialog({
+        title: '导入完成',
+        content: `共识别 ${result.totalCount} 条，新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，跳过 ${result.skippedCount} 条。`,
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+
+      this.loadStatus()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === 'INVALID_IMPORT_TXT') {
         wx.showToast({
-          title: '导入格式不正确',
+          title: '仅支持密麻麻导出的TXT',
           icon: 'none',
         })
         return
       }
 
-      const count = await repository.importPayload(parsed, mode)
-
-      this.setData({ importText: '' })
-      this.loadStats()
-
+      console.error('Import txt failed:', error)
       wx.showToast({
-        title: `已导入 ${count} 条`,
+        title: '导入失败，请重试',
         icon: 'none',
       })
-    } catch (error) {
-      console.warn('Failed to import data:', error)
-      wx.showToast({
-        title: 'JSON 解析失败',
-        icon: 'none',
+    } finally {
+      this.setData({ importing: false })
+    }
+  },
+
+  async onTapWipe() {
+    const confirmed = await this.openDialog({
+      title: '抹除密麻麻所有数据',
+      content: '抹除后数据无法恢复。确认继续吗？',
+      showCancel: false,
+      maskClosable: true,
+      confirmText: '继续抹除',
+      danger: true,
+    })
+
+    if (!confirmed) {
+      return
+    }
+
+    this.requestSensitive('wipe')
+  },
+
+  onTapPinClose() {
+    this.setData({
+      showPinSheet: false,
+      pinDigits: '',
+      pendingAction: '',
+    })
+  },
+
+  noop() {},
+
+  onTapPinKey(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.cooldownSeconds > 0) {
+      return
+    }
+
+    const key = event.currentTarget.dataset.key as string
+    if (!key) {
+      return
+    }
+
+    if (key === 'del') {
+      this.setData({
+        pinDigits: this.data.pinDigits.slice(0, -1),
+      })
+      return
+    }
+
+    if (this.data.pinDigits.length >= 6) {
+      return
+    }
+
+    const next = `${this.data.pinDigits}${key}`
+    this.setData({ pinDigits: next })
+
+    if (next.length === 6) {
+      void this.verifySensitivePin(next).catch((error) => {
+        console.error('Failed to verify sensitive passcode on mine page:', error)
+        this.setData({ pinDigits: '' })
+        wx.showToast({
+          title: '校验失败，请重试',
+          icon: 'none',
+        })
       })
     }
   },
+
+  requestSensitive(action: SensitiveAction) {
+    this.setData({
+      showPinSheet: true,
+      pinDigits: '',
+      pendingAction: action,
+    })
+  },
+
+  async verifySensitivePin(pin: string) {
+    const result = await verifyPin(pin)
+    this.setData({ pinDigits: '' })
+
+    if (result.code === 'OK') {
+      const action = this.data.pendingAction
+      this.setData({
+        showPinSheet: false,
+        pendingAction: '',
+      })
+      this.runSensitiveAction(action)
+      return
+    }
+
+    if (result.code === 'LOCKED') {
+      this.refreshCooldown()
+      wx.showToast({
+        title: '已触发冷却，请稍后',
+        icon: 'none',
+      })
+      return
+    }
+
+    if (result.code === 'PAIRING_REQUIRED') {
+      void this.openDialog({
+        title: '需要重置本地数据',
+        content: '暗号错误次数过多。请重新进入并设置启动暗号。',
+        showCancel: false,
+      })
+      return
+    }
+
+    wx.showToast({
+      title: `暗号错误，还剩 ${result.remainingAttempts} 次`,
+      icon: 'none',
+    })
+  },
+
+  async runSensitiveAction(action: SensitiveAction) {
+    if (action === 'export') {
+      await this.exportTxt()
+      return
+    }
+
+    if (action === 'wipe') {
+      await this.wipeAllData()
+    }
+  },
+
+  async exportTxt() {
+    const result = await repository.exportTxt()
+    const shareResult = await this.tryShareBackupFile(result.filePath)
+
+    if (shareResult === 'shared') {
+      await this.openDialog({
+        title: '导出完成',
+        content: '导出内容包含明文，请妥善保管。',
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+    } else if (shareResult === 'cancelled') {
+      await this.openDialog({
+        title: '已取消分享',
+        content: '备份文件已生成，但你已取消分享。',
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+    } else {
+      await this.openDialog({
+        title: '导出完成',
+        content: '备份文件已生成。导出内容包含明文，请妥善保管。',
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+    }
+
+    this.loadStatus()
+  },
+
+  tryShareBackupFile(filePath: string) {
+    const runtime = wx as WechatMiniprogram.Wx & {
+      shareFileMessage?: (options: ShareFileMessageOptions) => void
+    }
+    const shareFileMessage = runtime.shareFileMessage
+
+    if (typeof shareFileMessage !== 'function') {
+      return Promise.resolve('unavailable' as ShareResult)
+    }
+
+    return new Promise<ShareResult>((resolve) => {
+      shareFileMessage({
+        filePath,
+        fileName: filePath.split('/').pop() || 'Mimama-backup.txt',
+        success: () => resolve('shared'),
+        fail: (error) => {
+          const errMsg = (error as { errMsg?: string }).errMsg || ''
+          if (errMsg.includes('cancel')) {
+            resolve('cancelled')
+            return
+          }
+          console.warn('shareFileMessage failed:', error)
+          resolve('failed')
+        },
+      })
+    })
+  },
+
+  async wipeAllData() {
+    await repository.resetVault()
+    clearSession()
+
+    wx.showToast({
+      title: '密麻麻数据已清空',
+      icon: 'none',
+    })
+
+    wx.reLaunch({
+      url: '/pages/pin/index',
+    })
+  },
+
+  async loadStatus() {
+    const status = await repository.getStatus()
+
+    this.setData({
+      recordCount: status.recordCount,
+      recycleCount: status.recycleCount,
+    })
+  },
+
+  refreshCooldown() {
+    if (lockTimer) {
+      clearInterval(lockTimer)
+      lockTimer = undefined
+    }
+
+    const seconds = lockCountdownSeconds()
+    this.setData({ cooldownSeconds: seconds })
+
+    if (seconds <= 0) {
+      return
+    }
+
+    lockTimer = setInterval(() => {
+      const next = lockCountdownSeconds()
+      this.setData({ cooldownSeconds: next })
+      if (next <= 0 && lockTimer) {
+        clearInterval(lockTimer)
+        lockTimer = undefined
+      }
+    }, 1000)
+  },
+
+  openDialog(options: Partial<DialogState>) {
+    if (dialogResolver) {
+      dialogResolver(false)
+      dialogResolver = undefined
+    }
+
+    return new Promise<boolean>((resolve) => {
+      dialogResolver = resolve
+      this.setData({
+        dialog: {
+          ...createDialogState(),
+          ...options,
+          visible: true,
+        },
+      })
+    })
+  },
+
+  onDialogConfirm() {
+    this.closeDialog(true)
+  },
+
+  onDialogCancel() {
+    this.closeDialog(false)
+  },
+
+  closeDialog(confirmed: boolean) {
+    this.setData({ dialog: createDialogState() })
+    if (!dialogResolver) {
+      return
+    }
+
+    const resolve = dialogResolver
+    dialogResolver = undefined
+    resolve(confirmed)
+  },
+
+  applyAdaptiveLayout() {
+    const menuRect = typeof wx.getMenuButtonBoundingClientRect === 'function' ? wx.getMenuButtonBoundingClientRect() : null
+
+    const runtime = wx as WechatMiniprogram.Wx & {
+      getWindowInfo?: () => LayoutWindowInfo
+    }
+
+    const windowInfo: LayoutWindowInfo =
+      typeof runtime.getWindowInfo === 'function'
+        ? runtime.getWindowInfo()
+        : (wx.getSystemInfoSync() as unknown as LayoutWindowInfo)
+
+    const statusBarHeight = windowInfo.statusBarHeight || 20
+    const topPadding = menuRect ? menuRect.top : statusBarHeight + 8
+    const navHeight = menuRect ? menuRect.height : 32
+
+    this.setData({
+      navHeightPx: Math.round(navHeight),
+      pagePaddingTopPx: Math.round(topPadding),
+    })
+  },
 })
 
-const isExportPayload = (value: unknown): value is VaultExportPayload => {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-
-  const payload = value as VaultExportPayload
-  if (payload.version !== '0.1') {
-    return false
-  }
-
-  if (!Array.isArray(payload.items)) {
-    return false
-  }
-
-  return payload.items.every(isVaultItem)
-}
-
-const isVaultItem = (value: unknown): value is VaultItem => {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-
-  const item = value as VaultItem
-  return (
-    typeof item.id === 'string' &&
-    typeof item.title === 'string' &&
-    typeof item.account === 'string' &&
-    typeof item.password === 'string' &&
-    typeof item.website === 'string' &&
-    typeof item.note === 'string' &&
-    typeof item.isFavorite === 'boolean' &&
-    typeof item.createdAt === 'number' &&
-    typeof item.updatedAt === 'number' &&
-    typeof item.lastUsedAt === 'number'
-  )
+const pickTxtFile = () => {
+  return new Promise<WechatMiniprogram.ChooseFile | null>((resolve, reject) => {
+    wx.chooseMessageFile({
+      count: 1,
+      type: 'file',
+      extension: ['txt'],
+      success: (res) => {
+        resolve(res.tempFiles[0] || null)
+      },
+      fail: (error) => {
+        const errMsg = (error as { errMsg?: string }).errMsg || ''
+        if (errMsg.includes('cancel')) {
+          resolve(null)
+          return
+        }
+        reject(error)
+      },
+    })
+  })
 }

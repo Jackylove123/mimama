@@ -1,15 +1,20 @@
-import { STORAGE_MODE } from './services/runtime-config'
-import { getVaultRepository } from './services/vault-repository'
+import { PRODUCT_POSITIONING } from './services/runtime-config'
+import { onAppHide, onAppShow } from './services/security'
 
 App<IAppOption>({
   globalData: {
-    storageMode: STORAGE_MODE,
+    productPositioning: PRODUCT_POSITIONING,
   },
 
   onLaunch() {
-    const repository = getVaultRepository(STORAGE_MODE)
-    repository.ensureSeedData().catch((error) => {
-      console.error('Failed to initialize seed data:', error)
-    })
+    onAppShow()
+  },
+
+  onShow() {
+    onAppShow()
+  },
+
+  onHide() {
+    onAppHide()
   },
 })

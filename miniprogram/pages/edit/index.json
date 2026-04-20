@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "编辑密码",
+  "navigationBarTitleText": "添加",
+  "navigationBarTextStyle": "white",
+  "navigationBarBackgroundColor": "#1C1C1E",
   "usingComponents": {}
 }

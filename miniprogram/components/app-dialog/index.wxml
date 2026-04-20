@@ -1,0 +1,15 @@
+<view wx:if="{{visible}}" class="dialog-mask" bindtap="onMaskTap">
+  <view class="dialog-panel" catchtap="noop">
+    <view class="dialog-title">{{title}}</view>
+    <view class="dialog-content">{{content}}</view>
+
+    <view wx:if="{{showCancel}}" class="dialog-actions two">
+      <view class="btn cancel" bindtap="onCancelTap" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{cancelText}}</view>
+      <view class="btn confirm {{danger ? 'danger' : ''}}" bindtap="onConfirmTap" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{confirmText}}</view>
+    </view>
+
+    <view wx:else class="dialog-actions one">
+      <view class="btn confirm {{danger ? 'danger' : ''}}" bindtap="onConfirmTap" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{confirmText}}</view>
+    </view>
+  </view>
+</view>

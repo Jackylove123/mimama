@@ -1,31 +1,107 @@
-<view class="page">
-  <view class="search" bindtap="onTapSearch">
-    <text class="search-placeholder">搜索账号 / 网站 / 备注</text>
-    <text class="search-action">搜索</text>
-  </view>
-
-  <view class="tabs">
-    <view class="tab {{filterTab === 'recent' ? 'active' : ''}}" data-tab="recent" bindtap="onChangeFilter">最近使用</view>
-    <view class="tab {{filterTab === 'favorite' ? 'active' : ''}}" data-tab="favorite" bindtap="onChangeFilter">收藏</view>
-  </view>
-
-  <view wx:if="{{loading}}" class="hint">加载中...</view>
-
-  <view wx:elif="{{cards.length === 0}}" class="hint">{{emptyText}}</view>
-
-  <view wx:else class="list">
-    <view wx:for="{{cards}}" wx:key="id" class="card" data-id="{{item.id}}" bindtap="onOpenDetail">
-      <view class="avatar">{{item.title.slice(0, 1)}}</view>
-      <view class="main">
-        <view class="row">
-          <text class="title">{{item.title}}</text>
-          <text wx:if="{{item.isFavorite}}" class="fav">★</text>
-        </view>
-        <view class="account">{{item.account}}</view>
-        <view class="meta">{{item.maskedPassword}} · {{item.relativeUpdatedAt}}</view>
-      </view>
+<view class="page" style="padding-top: {{pagePaddingTopPx}}px; padding-bottom: {{pagePaddingBottomPx}}px;">
+  <view class="topbar" style="height: {{navHeightPx}}px;">
+    <view class="brand-left">
+      <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
+      <view class="brand-name mimama-misans">密麻麻</view>
     </view>
   </view>
 
-  <view class="fab" bindtap="onTapCreate">+</view>
+  <view class="search-box {{compactHeader ? 'compact-hide' : ''}}">
+    <view class="search-input-wrap">
+      <input
+        class="search-input"
+        placeholder=""
+        value="{{query}}"
+        bindinput="onInputQuery"
+        confirm-type="search"
+      />
+      <view wx:if="{{!query}}" class="search-ghost-placeholder">搜索标题 / 账号 / 备注</view>
+    </view>
+    <view wx:if="{{query}}" class="clear" bindtap="onClearQuery" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">清空</view>
+  </view>
+
+  <scroll-view
+    class="pill-scroll {{compactHeader ? 'compact-hide' : ''}}"
+    scroll-x
+    enhanced="{{true}}"
+    show-scrollbar="{{false}}"
+    scroll-into-view="{{pillScrollIntoView}}"
+    scroll-with-animation
+  >
+    <view class="pill-row">
+      <view
+        wx:for="{{pills}}"
+        wx:key="key"
+        id="pill-{{item.key}}"
+        class="pill {{item.key === activeCategory ? 'active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onTapCategory"
+        hover-class="pressable-active"
+        hover-start-time="0"
+        hover-stay-time="28"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <view wx:if="{{reminderVisible}}" class="reminder {{reminderLevel}} {{compactHeader ? 'compact-hide' : ''}}">
+    <view class="reminder-text">{{reminderMessage}}</view>
+    <view class="reminder-action" bindtap="onTapBackup" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{reminderActionText}}</view>
+  </view>
+
+  <view class="swipe-zone">
+    <swiper
+      class="category-swiper"
+      current="{{currentCategoryIndex}}"
+      bindchange="onSwiperChange"
+      duration="300"
+      easing-function="easeOutCubic"
+      skip-hidden-item-layout="{{true}}"
+    >
+      <swiper-item wx:for="{{categoryPanels}}" wx:key="key" wx:for-item="panel" wx:for-index="panelIndex">
+        <scroll-view scroll-y class="panel-scroll" bindscroll="onPanelScroll" data-index="{{panelIndex}}">
+          <view class="panel-scroll-inner">
+            <view wx:if="{{loading && panelIndex === currentCategoryIndex}}" class="hint">加载中...</view>
+
+            <view wx:elif="{{cards.length === 0}}" class="hint">还没有记录，点右下角“添加”开始。</view>
+
+            <view wx:elif="{{panel.sections.length === 0}}" class="hint">当前分类下暂无记录。</view>
+
+            <view wx:else class="list list-fade-{{listFadeToken % 2}}">
+              <view wx:for="{{panel.sections}}" wx:key="key" wx:for-item="section" class="section">
+                <view wx:if="{{panel.key === 'all'}}" class="section-title">{{section.label}}（{{section.count}}）</view>
+
+                <view wx:for="{{section.cards}}" wx:key="id" wx:for-item="card" class="card" data-id="{{card.id}}" bindtap="onOpenDetail">
+                  <view class="card-title">{{card.title}}</view>
+                  <view class="line">账号：{{card.account}}</view>
+                  <view wx:if="{{card.revealed}}" class="line">密码：{{card.passwordPlain}}</view>
+
+                  <view class="actions">
+                    <view class="action {{card.revealed ? 'revealing' : ''}}" data-id="{{card.id}}" catchtap="onRevealPassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+                      <text wx:if="{{card.revealed}}">{{revealCountdown}}</text>
+                      <text wx:else>显示 8 秒</text>
+                    </view>
+                    <view class="action" data-id="{{card.id}}" data-account="{{card.account}}" catchtap="onCopyAccount" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">复制账号</view>
+                    <view class="action" data-id="{{card.id}}" data-password="{{card.passwordPlain}}" catchtap="onCopyPassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">复制密码</view>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <view
+    class="fab"
+    style="bottom: {{fabBottomPx}}px;"
+    bindtap="onTapAdd"
+    hover-class="light-press-active"
+    hover-start-time="0"
+    hover-stay-time="28"
+  >
+    <text class="fab-plus">+</text>
+  </view>
 </view>

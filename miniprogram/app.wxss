@@ -1,13 +1,34 @@
 page {
   font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
-  color: #0f172a;
-  background: #f6f8fa;
+  color: #f5f6fa;
+  background: linear-gradient(160deg, #1b1c20, #121317 58%);
 }
 
 view,
 text,
 input,
 textarea,
-button {
+button,
+image {
   box-sizing: border-box;
+}
+
+.pressable-active {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.light-press-active {
+  transform: scale(0.97);
+  filter: brightness(1.03);
+}
+
+.brand-word {
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.4rpx;
+}
+
+.mimama-misans {
+  font-family: 'Swei Gothic CJK TC', 'Swei Gothic', '獅尾圓體', 'PingFang SC', 'Helvetica Neue', sans-serif;
 }

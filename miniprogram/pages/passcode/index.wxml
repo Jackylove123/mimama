@@ -1,0 +1,46 @@
+<view class="page">
+  <view class="card">
+    <view class="title">{{title}}</view>
+    <view class="tips">{{tips}}</view>
+
+    <view class="dots">
+      <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < digits.length ? 'filled' : ''}}"></view>
+    </view>
+
+    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中 {{cooldownSeconds}} 秒</view>
+  </view>
+
+  <view class="keypad">
+    <view wx:for="{{keypadRows}}" wx:key="index" class="row">
+      <view
+        wx:for="{{item}}"
+        wx:key="*this"
+        class="key {{item === '' ? 'empty' : ''}}"
+        data-key="{{item}}"
+        bindtap="onTapKey"
+        hover-class="{{item ? 'pressable-active' : ''}}"
+        hover-start-time="0"
+        hover-stay-time="28"
+      >
+        <text wx:if="{{item === 'del'}}">删除</text>
+        <text wx:elif="{{item}}">{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{stage === 'new_confirm'}}" class="reset-first" bindtap="onResetNewFirstRound" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+    重置第一轮输入
+  </view>
+
+  <app-dialog
+    visible="{{dialog.visible}}"
+    title="{{dialog.title}}"
+    content="{{dialog.content}}"
+    showCancel="{{dialog.showCancel}}"
+    cancelText="{{dialog.cancelText}}"
+    confirmText="{{dialog.confirmText}}"
+    danger="{{dialog.danger}}"
+    bindconfirm="onDialogConfirm"
+    bindcancel="onDialogCancel"
+  />
+</view>

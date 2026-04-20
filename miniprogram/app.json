@@ -2,50 +2,47 @@
   "pages": [
     "pages/pin/index",
     "pages/vault/index",
-    "pages/search/index",
-    "pages/favorites/index",
     "pages/mine/index",
-    "pages/detail/index",
+    "pages/about/index",
+    "pages/recycle/index",
     "pages/edit/index",
+    "pages/detail/index",
+    "pages/passcode/index",
     "pages/index/index",
     "pages/logs/logs"
   ],
   "window": {
-    "navigationBarTextStyle": "black",
+    "navigationBarTextStyle": "white",
     "navigationBarTitleText": "密麻麻",
-    "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#F6F8FA",
-    "backgroundTextStyle": "dark"
+    "navigationBarBackgroundColor": "#1C1C1E",
+    "backgroundColor": "#121317",
+    "backgroundTextStyle": "light",
+    "backgroundColorTop": "#1C1C1E",
+    "backgroundColorBottom": "#121317"
+  },
+  "networkTimeout": {
+    "request": 10000,
+    "connectSocket": 10000,
+    "uploadFile": 20000,
+    "downloadFile": 20000
   },
   "tabBar": {
-    "color": "#64748B",
-    "selectedColor": "#176B87",
-    "backgroundColor": "#FFFFFF",
+    "color": "#8E919A",
+    "selectedColor": "#FFFFFF",
+    "backgroundColor": "#1A1B1F",
     "borderStyle": "black",
     "list": [
       {
         "pagePath": "pages/vault/index",
-        "text": "保险库",
-        "iconPath": "assets/tab/icon.png",
-        "selectedIconPath": "assets/tab/icon-active.png"
-      },
-      {
-        "pagePath": "pages/search/index",
-        "text": "搜索",
-        "iconPath": "assets/tab/icon.png",
-        "selectedIconPath": "assets/tab/icon-active.png"
-      },
-      {
-        "pagePath": "pages/favorites/index",
-        "text": "常用",
-        "iconPath": "assets/tab/icon.png",
-        "selectedIconPath": "assets/tab/icon-active.png"
+        "text": "密麻麻",
+        "iconPath": "assets/tab/vault.png",
+        "selectedIconPath": "assets/tab/vault-active.png"
       },
       {
         "pagePath": "pages/mine/index",
         "text": "我的",
-        "iconPath": "assets/tab/icon.png",
-        "selectedIconPath": "assets/tab/icon-active.png"
+        "iconPath": "assets/tab/mine.png",
+        "selectedIconPath": "assets/tab/mine-active.png"
       }
     ]
   },

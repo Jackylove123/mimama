@@ -1,15 +1,31 @@
 import { getVaultRepository } from '../../services/vault-repository'
 import { ensureUnlocked } from '../../utils/auth-guard'
-import { lockCountdownSeconds, markSensitiveVerified, needsSensitiveVerification, verifyPin } from '../../services/security'
 import { maskPassword } from '../../utils/password'
 
-const app = getApp<IAppOption>()
-const repository = getVaultRepository(app.globalData.storageMode)
-
-type SensitiveAction = 'reveal' | 'copy' | 'copyExit' | ''
+const repository = getVaultRepository()
 
 let remaskTimer: number | undefined
-let lockTimer: number | undefined
+let dialogResolver: ((confirmed: boolean) => void) | undefined
+
+type DialogState = {
+  visible: boolean
+  title: string
+  content: string
+  showCancel: boolean
+  cancelText: string
+  confirmText: string
+  danger: boolean
+}
+
+const createDialogState = (): DialogState => ({
+  visible: false,
+  title: '',
+  content: '',
+  showCancel: true,
+  cancelText: '取消',
+  confirmText: '确定',
+  danger: false,
+})
 
 Page({
   data: {
@@ -17,22 +33,10 @@ Page({
     title: '',
     account: '',
     password: '',
-    website: '',
     note: '',
-    isFavorite: false,
     passwordVisible: false,
     maskedPassword: '••••••••',
-    showSensitivePinSheet: false,
-    sensitiveDigits: '',
-    pendingAction: '' as SensitiveAction,
-    cooldownSeconds: 0,
-    keypadRows: [
-      ['1', '2', '3'],
-      ['4', '5', '6'],
-      ['7', '8', '9'],
-      ['', '0', 'del'],
-    ],
-    pinSlots: [0, 1, 2, 3, 4, 5],
+    dialog: createDialogState(),
   },
 
   onLoad(options) {
@@ -50,55 +54,48 @@ Page({
 
   onShow() {
     const redirect = `/pages/detail/index?id=${this.data.id}`
-
     if (!ensureUnlocked(redirect)) {
       return
     }
 
     this.loadItem()
-    this.refreshCooldown()
-  },
-
-  onUnload() {
-    this.clearTimers()
   },
 
   onHide() {
-    this.resetPasswordMask()
+    this.clearRemaskTimer()
+    this.setData({ passwordVisible: false })
+  },
+
+  onUnload() {
+    this.clearRemaskTimer()
+    if (dialogResolver) {
+      dialogResolver(false)
+      dialogResolver = undefined
+    }
   },
 
   async onTapCopyAccount() {
-    if (!this.data.account) {
-      return
-    }
+    await copyText(this.data.account, '账号已复制')
+    await repository.touchLastUsed(this.data.id)
+  },
 
-    await copyToClipboard(this.data.account, '账号已复制')
+  async onTapCopyPassword() {
+    await copyText(this.data.password, '密码已复制')
+    await repository.touchLastUsed(this.data.id)
   },
 
   onTapTogglePassword() {
     if (this.data.passwordVisible) {
-      this.resetPasswordMask()
+      this.clearRemaskTimer()
+      this.setData({ passwordVisible: false })
       return
     }
 
-    this.runSensitiveAction('reveal')
-  },
-
-  onTapCopyPassword() {
-    this.runSensitiveAction('copy')
-  },
-
-  onTapCopyAndExit() {
-    this.runSensitiveAction('copyExit')
-  },
-
-  async onToggleFavorite() {
-    if (!this.data.id) {
-      return
-    }
-
-    await repository.toggleFavorite(this.data.id)
-    this.loadItem()
+    this.setData({ passwordVisible: true })
+    this.clearRemaskTimer()
+    remaskTimer = setTimeout(() => {
+      this.setData({ passwordVisible: false })
+    }, 8 * 1000)
   },
 
   onTapEdit() {
@@ -107,55 +104,20 @@ Page({
     })
   },
 
-  onTapSensitiveClose() {
-    this.setData({
-      showSensitivePinSheet: false,
-      sensitiveDigits: '',
-      pendingAction: '',
-    })
-  },
-
-  noop() {},
-
-  onTapSensitiveKey(event: WechatMiniprogram.BaseEvent) {
-    if (this.data.cooldownSeconds > 0) {
-      return
-    }
-
-    const key = event.currentTarget.dataset.key as string
-    if (!key) {
-      return
-    }
-
-    if (key === 'del') {
-      this.setData({
-        sensitiveDigits: this.data.sensitiveDigits.slice(0, -1),
-      })
-      return
-    }
-
-    if (this.data.sensitiveDigits.length >= 6) {
-      return
-    }
-
-    const next = `${this.data.sensitiveDigits}${key}`
-    this.setData({ sensitiveDigits: next })
-
-    if (next.length === 6) {
-      this.verifySensitivePin(next)
-    }
-  },
-
   async onTapDelete() {
-    const { confirm } = await showConfirm('删除记录', '确认删除这条记录吗？')
-    if (!confirm) {
+    const confirmed = await this.openDialog({
+      title: '删除记录',
+      content: '确认删除这条记录吗？删除后将移入回收站，保留 30 天。',
+      confirmText: '移入回收站',
+      danger: true,
+    })
+    if (!confirmed) {
       return
     }
 
     await repository.deleteItem(this.data.id)
-
     wx.showToast({
-      title: '已删除',
+      title: '已移入回收站',
       icon: 'none',
     })
 
@@ -176,152 +138,58 @@ Page({
       title: item.title,
       account: item.account,
       password: item.password,
-      website: item.website,
       note: item.note,
-      isFavorite: item.isFavorite,
       passwordVisible: false,
       maskedPassword: maskPassword(item.password),
     })
   },
 
-  async runSensitiveAction(action: SensitiveAction) {
-    if (!this.data.password) {
-      return
-    }
-
-    if (!needsSensitiveVerification()) {
-      this.executeSensitiveAction(action)
-      return
-    }
-
-    this.setData({
-      showSensitivePinSheet: true,
-      pendingAction: action,
-      sensitiveDigits: '',
-    })
-  },
-
-  verifySensitivePin(pin: string) {
-    const result = verifyPin(pin)
-
-    if (result.code === 'OK') {
-      markSensitiveVerified()
-      const action = this.data.pendingAction
-      this.setData({
-        showSensitivePinSheet: false,
-        pendingAction: '',
-        sensitiveDigits: '',
-      })
-      this.executeSensitiveAction(action)
-      return
-    }
-
-    this.setData({ sensitiveDigits: '' })
-
-    if (result.code === 'LOCKED') {
-      wx.showToast({
-        title: '已触发冷却，请稍后',
-        icon: 'none',
-      })
-      this.refreshCooldown()
-      return
-    }
-
-    if (result.code === 'PAIRING_REQUIRED') {
-      this.setData({
-        showSensitivePinSheet: false,
-        pendingAction: '',
-      })
-      wx.navigateTo({
-        url: `/pages/pin/index?redirect=${encodeURIComponent(`/pages/detail/index?id=${this.data.id}`)}`,
-      })
-      return
-    }
-
-    wx.showToast({
-      title: `PIN 错误，还剩 ${result.remainingAttempts} 次`,
-      icon: 'none',
-    })
-  },
-
-  executeSensitiveAction(action: SensitiveAction) {
-    if (action === 'reveal') {
-      this.setData({
-        passwordVisible: true,
-      })
-      this.startRemaskTimer()
-      return
-    }
-
-    if (action === 'copy') {
-      copyToClipboard(this.data.password, '密码已复制')
-      repository.touchLastUsed(this.data.id)
-      return
-    }
-
-    if (action === 'copyExit') {
-      copyToClipboard(this.data.password, '已复制并退出').then(() => {
-        repository.touchLastUsed(this.data.id)
-        exitMiniProgramSafe()
-      })
-    }
-  },
-
-  startRemaskTimer() {
-    if (remaskTimer) {
-      clearTimeout(remaskTimer)
-    }
-
-    remaskTimer = setTimeout(() => {
-      this.resetPasswordMask()
-    }, 10 * 1000)
-  },
-
-  resetPasswordMask() {
+  clearRemaskTimer() {
     if (remaskTimer) {
       clearTimeout(remaskTimer)
       remaskTimer = undefined
     }
+  },
 
-    this.setData({
-      passwordVisible: false,
+  openDialog(options: Partial<DialogState>) {
+    if (dialogResolver) {
+      dialogResolver(false)
+      dialogResolver = undefined
+    }
+
+    return new Promise<boolean>((resolve) => {
+      dialogResolver = resolve
+      this.setData({
+        dialog: {
+          ...createDialogState(),
+          ...options,
+          visible: true,
+        },
+      })
     })
   },
 
-  refreshCooldown() {
-    if (lockTimer) {
-      clearInterval(lockTimer)
-      lockTimer = undefined
-    }
+  onDialogConfirm() {
+    this.closeDialog(true)
+  },
 
-    const seconds = lockCountdownSeconds()
-    this.setData({ cooldownSeconds: seconds })
+  onDialogCancel() {
+    this.closeDialog(false)
+  },
 
-    if (seconds <= 0) {
+  closeDialog(confirmed: boolean) {
+    this.setData({ dialog: createDialogState() })
+    if (!dialogResolver) {
       return
     }
 
-    lockTimer = setInterval(() => {
-      const next = lockCountdownSeconds()
-      this.setData({ cooldownSeconds: next })
-      if (next <= 0 && lockTimer) {
-        clearInterval(lockTimer)
-        lockTimer = undefined
-      }
-    }, 1000)
-  },
-
-  clearTimers() {
-    this.resetPasswordMask()
-
-    if (lockTimer) {
-      clearInterval(lockTimer)
-      lockTimer = undefined
-    }
+    const resolve = dialogResolver
+    dialogResolver = undefined
+    resolve(confirmed)
   },
 })
 
-const copyToClipboard = (value: string, title: string) => {
+const copyText = (value: string, title: string) => {
   return new Promise<void>((resolve) => {
     wx.setClipboardData({
       data: value,
@@ -335,26 +203,4 @@ const copyToClipboard = (value: string, title: string) => {
       fail: () => resolve(),
     })
   })
-}
-
-const showConfirm = (title: string, content: string) => {
-  return new Promise<WechatMiniprogram.ShowModalSuccessCallbackResult>((resolve) => {
-    wx.showModal({
-      title,
-      content,
-      success: (result) => {
-        resolve(result)
-      },
-    })
-  })
-}
-
-const exitMiniProgramSafe = () => {
-  const runtime = wx as WechatMiniprogram.Wx & {
-    exitMiniProgram?: () => void
-  }
-
-  if (typeof runtime.exitMiniProgram === 'function') {
-    runtime.exitMiniProgram()
-  }
 }

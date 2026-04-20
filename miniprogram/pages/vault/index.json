@@ -1,5 +1,8 @@
 {
-  "navigationBarTitleText": "密麻麻",
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "",
+  "navigationBarTextStyle": "white",
+  "navigationBarBackgroundColor": "#1C1C1E",
   "enablePullDownRefresh": true,
   "usingComponents": {}
 }

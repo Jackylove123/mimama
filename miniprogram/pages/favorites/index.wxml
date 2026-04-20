@@ -1,14 +1,1 @@
-<view class="page">
-  <view wx:if="{{cards.length === 0}}" class="hint">还没有收藏项，进入详情页可快速收藏。</view>
-
-  <view wx:else class="list">
-    <view wx:for="{{cards}}" wx:key="id" class="card" data-id="{{item.id}}" bindtap="onOpenDetail">
-      <view class="main">
-        <view class="title">{{item.title}}</view>
-        <view class="account">{{item.account}}</view>
-        <view class="meta">最近更新 {{item.updatedText}}</view>
-      </view>
-      <view class="unstar" data-id="{{item.id}}" catchtap="onToggleFavorite">取消收藏</view>
-    </view>
-  </view>
-</view>
+<view class="placeholder">已合并到“密麻麻”列表。</view>

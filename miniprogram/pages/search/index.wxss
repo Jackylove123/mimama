@@ -1,64 +1,11 @@
-.page {
+page {
   min-height: 100vh;
-  background: #f6f8fa;
-  padding: 24rpx 24rpx calc(30rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
+  background: linear-gradient(160deg, #1b1c20, #121317 58%);
 }
 
-.search-box {
-  background: #ffffff;
-  border: 1rpx solid #e3e8ef;
-  border-radius: 18rpx;
-  height: 80rpx;
-  display: flex;
-  align-items: center;
-  padding: 0 18rpx;
-}
-
-.input {
-  flex: 1;
-  font-size: 28rpx;
-  color: #0f172a;
-}
-
-.clear {
-  color: #176b87;
-  font-size: 24rpx;
-}
-
-.list {
-  margin-top: 20rpx;
-}
-
-.card {
-  margin-bottom: 16rpx;
-  border-radius: 18rpx;
-  background: #ffffff;
-  border: 1rpx solid #e3e8ef;
-  padding: 20rpx;
-}
-
-.title {
-  color: #0f172a;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-
-.account {
-  margin-top: 10rpx;
-  color: #475569;
-  font-size: 26rpx;
-}
-
-.meta {
-  margin-top: 8rpx;
-  color: #94a3b8;
-  font-size: 24rpx;
-}
-
-.hint {
-  margin-top: 80rpx;
+.placeholder {
+  padding: 120rpx 0;
   text-align: center;
-  color: #64748b;
+  color: #8e919a;
   font-size: 26rpx;
 }

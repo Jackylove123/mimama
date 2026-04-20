@@ -1,4 +1,8 @@
 {
-  "navigationBarTitleText": "密码详情",
-  "usingComponents": {}
+  "navigationBarTitleText": "详情",
+  "navigationBarTextStyle": "white",
+  "navigationBarBackgroundColor": "#1C1C1E",
+  "usingComponents": {
+    "app-dialog": "/components/app-dialog/index"
+  }
 }

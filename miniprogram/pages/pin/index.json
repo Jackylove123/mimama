@@ -1,4 +1,9 @@
 {
-  "navigationBarTitleText": "PIN 验证",
-  "usingComponents": {}
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "",
+  "navigationBarTextStyle": "white",
+  "navigationBarBackgroundColor": "#1C1C1E",
+  "usingComponents": {
+    "app-dialog": "/components/app-dialog/index"
+  }
 }

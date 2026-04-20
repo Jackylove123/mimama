@@ -1,31 +1,103 @@
-<view class="page">
-  <view class="card">
-    <view class="title">v0.1 当前状态</view>
-    <view class="item">存储模式：<text class="value">{{storageMode === 'local' ? '本地存储' : '云存储'}}</text></view>
-    <view class="item">总记录：<text class="value">{{total}}</text></view>
-    <view class="item">收藏：<text class="value">{{favorite}}</text></view>
-    <view class="item">今日更新：<text class="value">{{updatedToday}}</text></view>
-    <view class="hint">{{cloudHint}}</view>
-  </view>
+<view class="page" style="padding-top: {{pagePaddingTopPx}}px;">
+  <view class="topbar" style="height: {{navHeightPx}}px;"></view>
 
-  <view class="card">
-    <view class="title">快捷操作</view>
-    <view class="button" bindtap="onTapAdd">新增密码</view>
-    <view class="button" bindtap="onTapExport">导出 JSON（复制到剪贴板）</view>
-    <view class="button ghost" bindtap="onResetDemo">重置示例数据</view>
-  </view>
-
-  <view class="card">
-    <view class="title">导入 JSON</view>
-    <textarea
-      class="textarea"
-      placeholder="粘贴导出的 JSON 内容"
-      value="{{importText}}"
-      bindinput="onImportInput"
-    />
-    <view class="row">
-      <view class="half" bindtap="onImportAppend">追加导入</view>
-      <view class="half" bindtap="onImportReplace">覆盖导入</view>
+  <view class="hero">
+    <image class="hero-logo" src="/assets/mimama-logo.png" mode="aspectFill" />
+    <view class="hero-title mimama-misans">密麻麻</view>
+    <view class="hero-subtitle">纯本地密码小本</view>
+    <view class="hero-pill">
+      <view class="hero-pill-dot"></view>
+      <view class="hero-pill-text">本地加密已就绪 · 只有你能开启</view>
     </view>
   </view>
+
+  <view class="card">
+    <view class="asset-row layer-a">
+      <view class="asset-label">记录</view>
+      <view class="asset-value">{{recordCount}} 条</view>
+    </view>
+    <view class="asset-row layer-b" bindtap="onTapRecycle" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="asset-label">回收站</view>
+      <view class="asset-right">
+        <view class="asset-sub">{{recycleCount}} 条 · 30天保留</view>
+        <view class="chevron">›</view>
+      </view>
+    </view>
+    <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="asset-label">重置启动暗号</view>
+      <view class="asset-right">
+        <view class="chevron">›</view>
+      </view>
+    </view>
+    <view class="asset-row layer-b">
+      <view class="asset-label">导入备份</view>
+      <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
+        {{importing ? '导入中' : '导入'}}
+      </view>
+    </view>
+    <view class="import-hint">使用备份档案，一键恢复记录。</view>
+    <view class="asset-row layer-a">
+      <view class="asset-label">导出备份</view>
+      <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
+    </view>
+  </view>
+
+  <view class="warning-note">
+    <view class="warning-icon">!</view>
+    <view class="warning-text">
+      密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出档案并妥善保存，这是找回记录的唯一途径。
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="setting-row danger-row" bindtap="onTapWipe" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="setting-title danger-title">抹除密麻麻</view>
+    </view>
+    <view class="setting-row" bindtap="onTapAbout" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="setting-title">关于密麻麻</view>
+      <view class="chevron">›</view>
+    </view>
+  </view>
+
+  <view wx:if="{{showPinSheet}}" class="overlay" bindtap="onTapPinClose">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-title">输入启动暗号确认</view>
+      <view class="sheet-sub">验证通过后将执行当前操作</view>
+      <view class="dots">
+        <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < pinDigits.length ? 'filled' : ''}}"></view>
+      </view>
+      <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中 {{cooldownSeconds}} 秒</view>
+
+      <view class="keypad">
+        <view wx:for="{{keypadRows}}" wx:key="index" class="row">
+          <view
+            wx:for="{{item}}"
+            wx:key="*this"
+            class="key {{item === '' ? 'empty' : ''}}"
+            data-key="{{item}}"
+            bindtap="onTapPinKey"
+            hover-class="{{item ? 'pressable-active' : ''}}"
+            hover-start-time="0"
+            hover-stay-time="28"
+          >
+            <text wx:if="{{item === 'del'}}">删除</text>
+            <text wx:elif="{{item}}">{{item}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <app-dialog
+    visible="{{dialog.visible}}"
+    title="{{dialog.title}}"
+    content="{{dialog.content}}"
+    showCancel="{{dialog.showCancel}}"
+    maskClosable="{{dialog.maskClosable}}"
+    cancelText="{{dialog.cancelText}}"
+    confirmText="{{dialog.confirmText}}"
+    danger="{{dialog.danger}}"
+    bindconfirm="onDialogConfirm"
+    bindcancel="onDialogCancel"
+  />
 </view>

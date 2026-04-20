@@ -1,6 +1,11 @@
+page {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #1b1c20, #121317 58%);
+}
+
 .placeholder {
   padding: 120rpx 0;
   text-align: center;
-  color: #64748b;
+  color: #8e919a;
   font-size: 26rpx;
 }

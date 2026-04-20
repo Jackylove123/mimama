@@ -1,0 +1,36 @@
+<view class="page">
+  <view class="header">
+    <view class="title">回收站</view>
+    <view class="subtitle">已删除记录保留 30 天，过期自动清理</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="hint">加载中...</view>
+  <view wx:elif="{{cards.length === 0}}" class="hint">回收站是空的。</view>
+
+  <view wx:else class="list">
+    <view wx:for="{{cards}}" wx:key="id" class="card">
+      <view class="card-title">{{item.title}}</view>
+      <view class="line">账号：{{item.account}}</view>
+      <view class="line subtle">删除时间：{{item.deletedAtText}}</view>
+      <view class="line subtle">{{item.remainDaysText}}</view>
+      <view class="actions">
+        <view class="action" data-id="{{item.id}}" bindtap="onTapRestore" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">恢复</view>
+        <view class="action danger" data-id="{{item.id}}" bindtap="onTapDeleteNow" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">彻底删除</view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{cards.length > 0}}" class="clear-all" bindtap="onTapClearAll" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">清空回收站</view>
+
+  <app-dialog
+    visible="{{dialog.visible}}"
+    title="{{dialog.title}}"
+    content="{{dialog.content}}"
+    showCancel="{{dialog.showCancel}}"
+    cancelText="{{dialog.cancelText}}"
+    confirmText="{{dialog.confirmText}}"
+    danger="{{dialog.danger}}"
+    bindconfirm="onDialogConfirm"
+    bindcancel="onDialogCancel"
+  />
+</view>

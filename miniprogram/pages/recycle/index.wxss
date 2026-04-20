@@ -1,0 +1,95 @@
+.page {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #1b1c20, #121317 58%);
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.header {
+  margin-bottom: 16rpx;
+}
+
+.title {
+  color: #ffffff;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin-top: 8rpx;
+  color: #97a0af;
+  font-size: 24rpx;
+}
+
+.hint {
+  margin-top: 120rpx;
+  text-align: center;
+  color: #8e919a;
+  font-size: 26rpx;
+}
+
+.list {
+  margin-top: 8rpx;
+}
+
+.card {
+  margin-bottom: 14rpx;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.card-title {
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.line {
+  margin-top: 8rpx;
+  color: #d8dbe3;
+  font-size: 25rpx;
+  word-break: break-all;
+}
+
+.line.subtle {
+  color: #9ba2b0;
+  font-size: 23rpx;
+}
+
+.actions {
+  margin-top: 14rpx;
+  display: flex;
+  justify-content: space-between;
+}
+
+.action {
+  width: 48%;
+  height: 62rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f6fa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24rpx;
+}
+
+.action.danger {
+  background: rgba(220, 38, 38, 0.2);
+  color: #ff9a9a;
+}
+
+.clear-all {
+  margin-top: 8rpx;
+  height: 76rpx;
+  border-radius: 14rpx;
+  background: rgba(220, 38, 38, 0.18);
+  color: #ff9a9a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 26rpx;
+  font-weight: 600;
+}
