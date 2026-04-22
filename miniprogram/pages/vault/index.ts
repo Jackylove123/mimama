@@ -41,6 +41,10 @@ interface LayoutWindowInfo {
 }
 
 const REVEAL_SECONDS = 8
+const DRAG_SWITCH_THRESHOLD_PX = 84
+const DRAG_SWAP_MIN_INTERVAL_MS = 140
+const DRAG_FOLLOW_FACTOR = 0.84
+const DRAG_OVERFLOW_FACTOR = 0.36
 let revealTimer: number | undefined
 
 const FILTER_PILLS: Array<{ key: 'all' | VaultCategory; label: string }> = [
@@ -79,6 +83,14 @@ Page({
     pagePaddingTopPx: 88,
     pagePaddingBottomPx: 180,
     fabBottomPx: 74,
+    draggingId: '',
+    isDragging: false,
+    dragStartY: 0,
+    dragLastY: 0,
+    dragOffsetY: 0,
+    dragStyle: '',
+    dragDirty: false,
+    dragLastSwapAt: 0,
   },
 
   onLoad() {
@@ -114,11 +126,13 @@ Page({
   onUnload() {
     this.hideRevealedPassword()
     this.clearRevealTimer()
+    this.stopDragging()
   },
 
   onHide() {
     this.hideRevealedPassword()
     this.clearRevealTimer()
+    this.stopDragging()
   },
 
   onPullDownRefresh() {
@@ -131,8 +145,12 @@ Page({
 
   onInputQuery(event: WechatMiniprogram.CustomEvent) {
     const rawValue = event.detail.value as string | undefined
+    const nextQuery = typeof rawValue === 'string' ? rawValue : ''
+    if (nextQuery && this.data.draggingId) {
+      this.stopDragging()
+    }
     this.setData({
-      query: typeof rawValue === 'string' ? rawValue : '',
+      query: nextQuery,
     })
 
     this.loadCards()
@@ -144,6 +162,10 @@ Page({
   },
 
   onTapCategory(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const key = event.currentTarget.dataset.key as 'all' | VaultCategory | undefined
     if (!key || key === this.data.activeCategory) {
       return
@@ -158,6 +180,10 @@ Page({
   },
 
   onSwiperChange(event: WechatMiniprogram.CustomEvent<{ current?: number }>) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const index = event.detail.current
     if (typeof index !== 'number' || index < 0 || index >= CATEGORY_SEQUENCE.length) {
       return
@@ -198,6 +224,10 @@ Page({
   },
 
   onOpenDetail(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const id = event.currentTarget.dataset.id as string
     if (!id) {
       return
@@ -216,6 +246,10 @@ Page({
   },
 
   onRevealPassword(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const id = event.currentTarget.dataset.id as string
     if (!id) {
       return
@@ -243,6 +277,10 @@ Page({
   },
 
   async onCopyAccount(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const id = event.currentTarget.dataset.id as string
     const value = event.currentTarget.dataset.account as string
     if (!id || !value) {
@@ -255,6 +293,10 @@ Page({
   },
 
   async onCopyPassword(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.draggingId) {
+      return
+    }
+
     const id = event.currentTarget.dataset.id as string
     const value = event.currentTarget.dataset.password as string
     if (!id || !value) {
@@ -341,6 +383,128 @@ Page({
     this.syncCardsRevealState()
   },
 
+  onCardLongPress(event: WechatMiniprogram.BaseEvent) {
+    if (!this.canDragCurrentCategory()) {
+      return
+    }
+
+    const id = event.currentTarget.dataset.id as string | undefined
+    const category = event.currentTarget.dataset.category as VaultCategory | undefined
+    if (!id || !category || category !== this.data.activeCategory) {
+      return
+    }
+
+    const touchY = pickTouchY(event)
+    this.setData({
+      draggingId: id,
+      isDragging: true,
+      dragStartY: typeof touchY === 'number' ? touchY : 0,
+      dragLastY: typeof touchY === 'number' ? touchY : 0,
+      dragOffsetY: 0,
+      dragStyle: 'transform: translate3d(0, 0px, 0) scale(1.015); z-index: 20;',
+      dragDirty: false,
+      dragLastSwapAt: 0,
+    })
+
+    if (typeof wx.vibrateShort === 'function') {
+      wx.vibrateShort({ type: 'light' })
+    }
+  },
+
+  onCardTouchMove(event: WechatMiniprogram.BaseEvent) {
+    if (!this.data.draggingId) {
+      return
+    }
+
+    const id = event.currentTarget.dataset.id as string | undefined
+    if (!id || id !== this.data.draggingId) {
+      return
+    }
+
+    const touchY = pickTouchY(event)
+    if (typeof touchY !== 'number') {
+      return
+    }
+
+    const now = Date.now()
+    const offsetY = touchY - this.data.dragStartY
+    const visualOffsetY = getDragVisualOffset(offsetY)
+    this.setData({
+      dragLastY: touchY,
+      dragOffsetY: offsetY,
+      dragStyle: `transform: translate3d(0, ${Math.round(visualOffsetY)}px, 0) scale(1.015); z-index: 20;`,
+    })
+
+    if (Math.abs(offsetY) < DRAG_SWITCH_THRESHOLD_PX) {
+      return
+    }
+
+    if (now - this.data.dragLastSwapAt < DRAG_SWAP_MIN_INTERVAL_MS) {
+      return
+    }
+
+    const direction: 1 | -1 = offsetY > 0 ? 1 : -1
+    const moved = this.reorderDraggingCard(direction)
+    if (!moved) {
+      return
+    }
+
+    const nextStartY = this.data.dragStartY + direction * DRAG_SWITCH_THRESHOLD_PX
+    const nextOffsetY = touchY - nextStartY
+    const nextVisualOffsetY = getDragVisualOffset(nextOffsetY)
+    this.setData({
+      dragStartY: nextStartY,
+      dragOffsetY: nextOffsetY,
+      dragStyle: `transform: translate3d(0, ${Math.round(nextVisualOffsetY)}px, 0) scale(1.015); z-index: 20;`,
+      dragLastSwapAt: now,
+    })
+
+    if (moved && !this.data.dragDirty) {
+      this.setData({ dragDirty: true })
+    }
+
+    if (moved && typeof wx.vibrateShort === 'function') {
+      wx.vibrateShort({ type: 'light' })
+    }
+  },
+
+  onCardTouchEnd() {
+    if (!this.data.draggingId) {
+      return
+    }
+
+    if (!this.data.dragDirty || !!this.data.query) {
+      this.stopDragging()
+      return
+    }
+
+    const activeCategory = this.data.activeCategory
+    if (activeCategory === 'all') {
+      this.stopDragging()
+      return
+    }
+
+    const orderedIds = this.data.cards.filter((card) => card.category === activeCategory).map((card) => card.id)
+
+    this.stopDragging()
+
+    void repository.reorderCategory(activeCategory, orderedIds).catch((error) => {
+      console.error('Failed to persist category drag order:', error)
+      wx.showToast({
+        title: '排序保存失败，请重试',
+        icon: 'none',
+      })
+    })
+  },
+
+  onDragLayerTouchMove(event: WechatMiniprogram.BaseEvent) {
+    this.onCardTouchMove(event)
+  },
+
+  onDragLayerTouchEnd() {
+    this.onCardTouchEnd()
+  },
+
   applyCategoryByIndex(nextIndex: number) {
     if (nextIndex < 0 || nextIndex >= CATEGORY_SEQUENCE.length) {
       return
@@ -359,6 +523,72 @@ Page({
     }
 
     this.setData(nextState)
+  },
+
+  canDragCurrentCategory() {
+    return !this.data.query && this.data.activeCategory !== 'all'
+  },
+
+  reorderDraggingCard(step: 1 | -1) {
+    const activeCategory = this.data.activeCategory
+    if (activeCategory === 'all') {
+      return false
+    }
+
+    const draggingId = this.data.draggingId
+    if (!draggingId) {
+      return false
+    }
+
+    const cards = [...this.data.cards]
+    const categoryIndexes: number[] = []
+    cards.forEach((card, index) => {
+      if (card.category === activeCategory) {
+        categoryIndexes.push(index)
+      }
+    })
+
+    const dragPos = categoryIndexes.findIndex((index) => cards[index].id === draggingId)
+    if (dragPos < 0) {
+      return false
+    }
+
+    const targetPos = dragPos + step
+    if (targetPos < 0 || targetPos >= categoryIndexes.length) {
+      return false
+    }
+
+    const fromIndex = categoryIndexes[dragPos]
+    const toIndex = categoryIndexes[targetPos]
+    ;[cards[fromIndex], cards[toIndex]] = [cards[toIndex], cards[fromIndex]]
+
+    this.setData({ cards })
+    this.buildCategoryPanels(cards, activeCategory, { animate: false })
+    return true
+  },
+
+  stopDragging() {
+    if (
+      !this.data.draggingId &&
+      !this.data.isDragging &&
+      !this.data.dragDirty &&
+      this.data.dragLastY === 0 &&
+      this.data.dragStartY === 0 &&
+      this.data.dragOffsetY === 0
+    ) {
+      return
+    }
+
+    this.setData({
+      draggingId: '',
+      isDragging: false,
+      dragDirty: false,
+      dragStartY: 0,
+      dragLastY: 0,
+      dragOffsetY: 0,
+      dragStyle: '',
+      dragLastSwapAt: 0,
+    })
   },
 
   buildCategoryPanels(cards: VaultCard[], activeCategory?: 'all' | VaultCategory, options?: { animate?: boolean }) {
@@ -508,4 +738,34 @@ const copyText = (value: string, title: string) => {
 
 const clamp = (value: number, min: number, max: number): number => {
   return Math.min(max, Math.max(min, value))
+}
+
+const pickTouchY = (event: WechatMiniprogram.BaseEvent): number | null => {
+  const detail = event as unknown as {
+    touches?: Array<{ clientY?: number }>
+    changedTouches?: Array<{ clientY?: number }>
+  }
+
+  const touch =
+    (detail.touches && detail.touches[0]) ||
+    (detail.changedTouches && detail.changedTouches[0]) ||
+    null
+
+  if (!touch || typeof touch.clientY !== 'number') {
+    return null
+  }
+
+  return touch.clientY
+}
+
+const getDragVisualOffset = (rawOffset: number): number => {
+  const abs = Math.abs(rawOffset)
+  const sign = rawOffset < 0 ? -1 : 1
+  if (abs <= DRAG_SWITCH_THRESHOLD_PX) {
+    return rawOffset * DRAG_FOLLOW_FACTOR
+  }
+
+  const overflow = abs - DRAG_SWITCH_THRESHOLD_PX
+  const eased = DRAG_SWITCH_THRESHOLD_PX * DRAG_FOLLOW_FACTOR + overflow * DRAG_OVERFLOW_FACTOR
+  return sign * eased
 }

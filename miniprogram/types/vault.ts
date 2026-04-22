@@ -9,6 +9,7 @@ export interface VaultItem {
   note: string
   category: VaultCategory
   categorySource: VaultCategorySource
+  sortOrder?: number
   deletedAt?: number
   createdAt: number
   updatedAt: number

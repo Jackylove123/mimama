@@ -249,7 +249,7 @@ class VaultRepository {
   async listItems() {
     const vault = this.readVaultWithSession()
     const { vault: purgedVault } = this.purgeExpiredDeleted(vault)
-    return purgedVault.items.filter((item) => !item.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt)
+    return purgedVault.items.filter((item) => !item.deletedAt).sort(compareActiveItems)
   }
 
   async searchItems(keyword: string, category: VaultCategory | 'all' = 'all') {
@@ -288,6 +288,11 @@ class VaultRepository {
     const categoryState = resolveCategoryState(nextTitle, input.category, input.categorySource, existing)
 
     if (existing) {
+      const nextSortOrder =
+        existing.category === categoryState.category
+          ? existing.sortOrder
+          : computeAppendSortOrder(vault.items, categoryState.category)
+
       const nextItems = vault.items.map((item) => {
         if (item.id !== existing.id) {
           return item
@@ -301,6 +306,7 @@ class VaultRepository {
           note: normalizedNote.trim(),
           category: categoryState.category,
           categorySource: categoryState.source,
+          sortOrder: nextSortOrder,
           updatedAt: now,
           lastUsedAt: now,
         }
@@ -318,6 +324,7 @@ class VaultRepository {
       note: normalizedNote.trim(),
       category: categoryState.category,
       categorySource: categoryState.source,
+      sortOrder: computeAppendSortOrder(vault.items, categoryState.category),
       deletedAt: undefined,
       createdAt: now,
       updatedAt: now,
@@ -427,6 +434,42 @@ class VaultRepository {
     })
 
     this.saveVault({ items: nextItems }, now)
+  }
+
+  async reorderCategory(category: VaultCategory, orderedIds: string[]) {
+    if (!orderedIds.length) {
+      return
+    }
+
+    const vault = this.readVaultWithSession()
+    const rankMap = new Map<string, number>()
+    orderedIds.forEach((id, index) => {
+      rankMap.set(id, index)
+    })
+
+    let changed = false
+    const nextItems = vault.items.map((item) => {
+      if (item.deletedAt || item.category !== category) {
+        return item
+      }
+
+      const nextRank = rankMap.get(item.id)
+      if (typeof nextRank !== 'number' || item.sortOrder === nextRank) {
+        return item
+      }
+
+      changed = true
+      return {
+        ...item,
+        sortOrder: nextRank,
+      }
+    })
+
+    if (!changed) {
+      return
+    }
+
+    this.saveVault({ items: nextItems }, Date.now())
   }
 
   async getStats(): Promise<VaultStats> {
@@ -914,6 +957,9 @@ const coerceVaultItem = (value: unknown, fallbackTimestamp: number): VaultItem |
   const createdAt = isNumber(raw.createdAt) ? raw.createdAt : updatedAt
   const lastUsedAt = isNumber(raw.lastUsedAt) ? raw.lastUsedAt : updatedAt
   const deletedAt = isNumber(raw.deletedAt) ? raw.deletedAt : undefined
+  const sortOrder = isNumber((raw as { sortOrder?: unknown }).sortOrder)
+    ? ((raw as { sortOrder?: number }).sortOrder as number)
+    : undefined
 
   return {
     id: isText(raw.id) && raw.id ? raw.id : createId(),
@@ -923,11 +969,41 @@ const coerceVaultItem = (value: unknown, fallbackTimestamp: number): VaultItem |
     note: isText(raw.note) ? raw.note : '',
     category: normalized.category,
     categorySource: normalized.source,
+    sortOrder,
     deletedAt,
     createdAt,
     updatedAt,
     lastUsedAt,
   }
+}
+
+const compareActiveItems = (a: VaultItem, b: VaultItem) => {
+  if (a.category === b.category) {
+    const aHasOrder = isNumber(a.sortOrder)
+    const bHasOrder = isNumber(b.sortOrder)
+
+    if (aHasOrder && bHasOrder && a.sortOrder !== b.sortOrder) {
+      return (a.sortOrder as number) - (b.sortOrder as number)
+    }
+
+    if (aHasOrder !== bHasOrder) {
+      return aHasOrder ? -1 : 1
+    }
+  }
+
+  return b.updatedAt - a.updatedAt
+}
+
+const computeAppendSortOrder = (items: VaultItem[], category: VaultCategory): number | undefined => {
+  const orders = items
+    .filter((item) => !item.deletedAt && item.category === category && isNumber(item.sortOrder))
+    .map((item) => item.sortOrder as number)
+
+  if (!orders.length) {
+    return undefined
+  }
+
+  return Math.max(...orders) + 1
 }
 
 const createId = () => {

@@ -54,6 +54,7 @@
     <swiper
       class="category-swiper"
       current="{{currentCategoryIndex}}"
+      disable-touch="{{isDragging}}"
       bindchange="onSwiperChange"
       duration="300"
       easing-function="easeOutCubic"
@@ -61,7 +62,7 @@
     >
       <swiper-item wx:for="{{categoryPanels}}" wx:key="key" wx:for-item="panel" wx:for-index="panelIndex">
         <scroll-view
-          scroll-y="{{panel.scrollable}}"
+          scroll-y="{{panel.scrollable && !draggingId}}"
           enhanced="{{true}}"
           show-scrollbar="{{false}}"
           class="panel-scroll"
@@ -79,7 +80,20 @@
               <view wx:for="{{panel.sections}}" wx:key="key" wx:for-item="section" class="section">
                 <view wx:if="{{panel.key === 'all'}}" class="section-title">{{section.label}}（{{section.count}}）</view>
 
-                <view wx:for="{{section.cards}}" wx:key="id" wx:for-item="card" class="card" data-id="{{card.id}}" bindtap="onOpenDetail">
+                <view
+                  wx:for="{{section.cards}}"
+                  wx:key="id"
+                  wx:for-item="card"
+                  class="card {{draggingId === card.id ? 'card-dragging' : ''}}"
+                  style="{{draggingId === card.id ? dragStyle : ''}}"
+                  data-id="{{card.id}}"
+                  data-category="{{card.category}}"
+                  bindtap="onOpenDetail"
+                  bindlongpress="onCardLongPress"
+                  bindtouchmove="onCardTouchMove"
+                  bindtouchend="onCardTouchEnd"
+                  bindtouchcancel="onCardTouchEnd"
+                >
                   <view class="card-title">{{card.title}}</view>
                   <view class="line">账号：{{card.account}}</view>
                   <view wx:if="{{card.revealed}}" class="line">密码：{{card.passwordPlain}}</view>
@@ -100,6 +114,14 @@
       </swiper-item>
     </swiper>
   </view>
+
+  <view
+    wx:if="{{isDragging}}"
+    class="drag-gesture-layer"
+    catchtouchmove="onDragLayerTouchMove"
+    catchtouchend="onDragLayerTouchEnd"
+    catchtouchcancel="onDragLayerTouchEnd"
+  />
 
   <view
     class="fab"
