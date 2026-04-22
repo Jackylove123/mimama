@@ -1,6 +1,7 @@
 import { hardResetVault, hasPin, lockCountdownSeconds, setPin, validatePinFormat, verifyPin } from '../../services/security'
 
 const TAB_PAGE_ROUTES = ['/pages/vault/index', '/pages/mine/index']
+const PRIVACY_AGREED_STORAGE_KEY = 'mm_privacy_agreed_v1'
 
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
@@ -27,7 +28,7 @@ const createDialogState = (): DialogState => ({
 
 Page({
   data: {
-    title: '请输入启动暗号',
+    title: '对一下启动暗号',
     tips: '不登录、不上传，只在本机解锁使用',
     digits: '',
     pinSlots: [0, 1, 2, 3, 4, 5],
@@ -40,25 +41,26 @@ Page({
     setupStep: 1,
     firstPin: '',
     creating: false,
+    pinBootstrapped: false,
     cooldownSeconds: 0,
     redirectPath: '/pages/vault/index',
+    showPrivacyPopup: false,
+    privacyContractName: '隐私协议',
+    privacyNeedOfficialAuth: false,
     dialog: createDialogState(),
   },
 
   async onLoad(options) {
-    const redirect = normalizeRedirect(options.redirect)
-    const creating = !(await hasPin())
-
     this.setData({
-      creating,
-      title: creating ? '设置启动暗号' : '请输入启动暗号',
-      tips: creating
-        ? '请设置 6 位启动暗号，用于本机解锁。'
-        : '连续输错会触发冷却；超过阈值需重置本地数据。',
-      redirectPath: redirect,
+      redirectPath: normalizeRedirect(options.redirect),
     })
 
-    this.refreshCooldown()
+    const privacyReady = await this.ensurePrivacyReady()
+    if (!privacyReady) {
+      return
+    }
+
+    await this.bootstrapPinPage()
   },
 
   onUnload() {
@@ -104,6 +106,126 @@ Page({
     }
   },
 
+  noop() {},
+
+  async ensurePrivacyReady() {
+    const localAgreed = this.hasLocalPrivacyAgreement()
+
+    const runtime = wx as WechatMiniprogram.Wx & {
+      getPrivacySetting?: (options: {
+        success: (res: { needAuthorization?: boolean; privacyContractName?: string }) => void
+        fail?: (error: unknown) => void
+      }) => void
+    }
+
+    if (typeof runtime.getPrivacySetting !== 'function') {
+      if (!localAgreed) {
+        this.openPrivacyPopup('隐私协议', false)
+        return false
+      }
+      return true
+    }
+
+    try {
+      const setting = await new Promise<{ needAuthorization?: boolean; privacyContractName?: string }>((resolve, reject) => {
+        runtime.getPrivacySetting!({
+          success: resolve,
+          fail: reject,
+        })
+      })
+
+      if (setting.needAuthorization) {
+        this.openPrivacyPopup(setting.privacyContractName || '隐私协议', true)
+        return false
+      }
+
+      if (!localAgreed) {
+        this.openPrivacyPopup(setting.privacyContractName || '隐私协议', false)
+        return false
+      }
+
+      if (!setting.needAuthorization) {
+        return true
+      }
+    } catch (error) {
+      console.warn('Failed to query privacy setting, fallback to local privacy gate:', error)
+      if (!localAgreed) {
+        this.openPrivacyPopup('隐私协议', false)
+        return false
+      }
+      return true
+    }
+
+    return true
+  },
+
+  async bootstrapPinPage() {
+    if (this.data.pinBootstrapped) {
+      return
+    }
+
+    const creating = !(await hasPin())
+
+    this.setData({
+      pinBootstrapped: true,
+      creating,
+      title: creating ? '设一个启动暗号' : '对一下启动暗号',
+      tips: creating
+        ? '设 6 位数字暗号，用它打开密麻麻。'
+        : '暗号连错会进入冷却；次数过多需重置本机数据。',
+    })
+
+    this.refreshCooldown()
+  },
+
+  onTapPrivacyContract() {
+    const runtime = wx as WechatMiniprogram.Wx & {
+      openPrivacyContract?: (options?: {
+        success?: () => void
+        fail?: (error: unknown) => void
+      }) => void
+    }
+
+    if (typeof runtime.openPrivacyContract === 'function') {
+      runtime.openPrivacyContract({
+        fail: (error) => {
+          console.warn('openPrivacyContract failed, fallback to privacy page:', error)
+          wx.navigateTo({ url: '/pages/privacy/index' })
+        },
+      })
+      return
+    }
+
+    wx.navigateTo({ url: '/pages/privacy/index' })
+  },
+
+  onRejectPrivacy() {
+    wx.showToast({
+      title: '同意后才能继续使用',
+      icon: 'none',
+    })
+
+    setTimeout(() => {
+      const runtime = wx as WechatMiniprogram.Wx & {
+        exitMiniProgram?: () => void
+      }
+      if (typeof runtime.exitMiniProgram === 'function') {
+        runtime.exitMiniProgram()
+      }
+    }, 420)
+  },
+
+  onAgreePrivacyTap() {
+    if (this.data.privacyNeedOfficialAuth) {
+      return
+    }
+    this.finishPrivacyAgreement()
+  },
+
+  onAgreePrivacyAuthorization() {
+    this.finishPrivacyAgreement()
+  },
+
   async handleFullPin(pin: string) {
     if (this.data.creating) {
       await this.handleSetupPin(pin)
@@ -114,7 +236,7 @@ Page({
 
     if (result.code === 'OK') {
       wx.showToast({
-        title: '解锁成功',
+        title: '暗号正确，已开启',
         icon: 'success',
       })
 
@@ -125,7 +247,7 @@ Page({
     if (result.code === 'INVALID') {
       this.setData({ digits: '' })
       wx.showToast({
-        title: `暗号错误，还剩 ${result.remainingAttempts} 次`,
+        title: `暗号不对，还可再试 ${result.remainingAttempts} 次`,
         icon: 'none',
       })
       return
@@ -158,8 +280,8 @@ Page({
       creating: true,
       setupStep: 1,
       firstPin: '',
-      title: '设置启动暗号',
-      tips: '请重新设置启动暗号，用于本机解锁。',
+      title: '设一个启动暗号',
+      tips: '请重新设 6 位数字暗号，用它打开密麻麻。',
     })
   },
 
@@ -179,13 +301,13 @@ Page({
         firstPin: pin,
         digits: '',
         setupStep: 2,
-        title: '再次输入启动暗号',
-        tips: '确认一致后将创建本地密文仓',
+        title: '再对一次暗号',
+        tips: '两次一致后，开始本地加密保存。',
       })
 
       this.showDialog({
-        title: '请牢记暗号',
-        content: '暗号仅存于你的脑海，一旦遗忘，数据将随风而去。',
+        title: '请记住这串暗号',
+        content: '暗号只在你这里。忘记暗号，记录将无法找回。',
         showCancel: false,
         confirmText: '继续',
       })
@@ -197,7 +319,7 @@ Page({
         digits: '',
         firstPin: '',
         setupStep: 1,
-        title: '设置启动暗号',
+        title: '设一个启动暗号',
         tips: '两次输入不一致，请重新设置',
       })
 
@@ -210,7 +332,7 @@ Page({
 
     await setPin(pin)
     wx.showToast({
-      title: '初始化完成',
+      title: '暗号设置完成，已开启',
       icon: 'success',
     })
 
@@ -222,8 +344,50 @@ Page({
       setupStep: 1,
       firstPin: '',
       digits: '',
-      title: '设置启动暗号',
-      tips: '请设置 6 位启动暗号，用于本机解锁。',
+      title: '设一个启动暗号',
+      tips: '设 6 位数字暗号，用它打开密麻麻。',
+    })
+  },
+
+  hasLocalPrivacyAgreement() {
+    try {
+      return !!wx.getStorageSync(PRIVACY_AGREED_STORAGE_KEY)
+    } catch (error) {
+      console.warn('Failed to read local privacy agreement state:', error)
+      return false
+    }
+  },
+
+  saveLocalPrivacyAgreement() {
+    try {
+      wx.setStorageSync(PRIVACY_AGREED_STORAGE_KEY, 1)
+    } catch (error) {
+      console.warn('Failed to persist local privacy agreement state:', error)
+    }
+  },
+
+  openPrivacyPopup(contractName: string, needOfficialAuth: boolean) {
+    this.setData({
+      showPrivacyPopup: true,
+      privacyContractName: contractName,
+      privacyNeedOfficialAuth: needOfficialAuth,
+    })
+  },
+
+  finishPrivacyAgreement() {
+    this.saveLocalPrivacyAgreement()
+
+    this.setData({
+      showPrivacyPopup: false,
+      privacyNeedOfficialAuth: false,
+    })
+
+    void this.bootstrapPinPage().catch((error) => {
+      console.error('Failed to continue boot after privacy authorization:', error)
+      wx.showToast({
+        title: '启动失败，请再试一次',
+        icon: 'none',
+      })
     })
   },
 
@@ -310,6 +474,19 @@ Page({
 
     if (TAB_PAGE_ROUTES.includes(target)) {
       wx.switchTab({ url: target })
+      return
+    }
+
+    const pages = getCurrentPages()
+    if (pages.length <= 1) {
+      wx.switchTab({
+        url: '/pages/vault/index',
+        success: () => {
+          setTimeout(() => {
+            wx.navigateTo({ url: target })
+          }, 0)
+        },
+      })
       return
     }
 

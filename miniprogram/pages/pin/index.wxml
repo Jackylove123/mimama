@@ -12,8 +12,8 @@
       <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < digits.length ? 'filled' : ''}}"></view>
     </view>
 
-    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中，请 {{cooldownSeconds}} 秒后重试</view>
-    <view class="warning">遗忘启动暗号将无法找回，只能重置本地数据。</view>
+    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">暗号输错过多，{{cooldownSeconds}} 秒后再试</view>
+    <view class="warning">忘记暗号就无法找回，只能重置本机数据。</view>
   </view>
 
   <view class="keypad">
@@ -51,4 +51,31 @@
     bindconfirm="onDialogConfirm"
     bindcancel="onDialogCancel"
   />
+
+  <view wx:if="{{showPrivacyPopup}}" class="privacy-mask">
+    <view class="privacy-panel" catchtap="noop">
+      <view class="privacy-title">隐私保护提示</view>
+      <view class="privacy-desc">
+        为保障功能正常使用，请先阅读并同意{{privacyContractName}}。
+      </view>
+      <view class="privacy-link" bindtap="onTapPrivacyContract" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+        查看隐私协议
+      </view>
+
+      <view class="privacy-actions">
+        <view class="privacy-btn ghost" bindtap="onRejectPrivacy" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">暂不使用</view>
+        <button
+          class="privacy-btn solid"
+          open-type="{{privacyNeedOfficialAuth ? 'agreePrivacyAuthorization' : ''}}"
+          bindtap="onAgreePrivacyTap"
+          bindagreeprivacyauthorization="onAgreePrivacyAuthorization"
+          hover-class="light-press-active"
+          hover-start-time="0"
+          hover-stay-time="28"
+        >
+          同意并继续
+        </button>
+      </view>
+    </view>
+  </view>
 </view>

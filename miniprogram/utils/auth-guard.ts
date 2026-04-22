@@ -5,7 +5,7 @@ export const ensureUnlocked = (redirectPath: string) => {
     return true
   }
 
-  wx.navigateTo({
+  wx.reLaunch({
     url: `/pages/pin/index?redirect=${encodeURIComponent(redirectPath)}`,
   })
 

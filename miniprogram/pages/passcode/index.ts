@@ -27,8 +27,8 @@ const createDialogState = (): DialogState => ({
 Page({
   data: {
     stage: 'verify_old' as Stage,
-    title: '验证旧暗号',
-    tips: '请输入当前启动暗号',
+    title: '先对旧暗号',
+    tips: '输入当前暗号',
     digits: '',
     firstNewPin: '',
     oldPin: '',
@@ -101,7 +101,7 @@ Page({
       if (result.code === 'OK') {
         this.setData({
           stage: 'new_first',
-          title: '设置新暗号',
+          title: '设一个新暗号',
           tips: '请输入新的 6 位启动暗号',
           digits: '',
           oldPin: pin,
@@ -124,15 +124,15 @@ Page({
 
       this.setData({
         stage: 'new_confirm',
-        title: '再次输入新暗号',
-        tips: '确认无误后将重新加密本地数据',
+        title: '再对一次新暗号',
+        tips: '两次一致后，重新加密本地数据',
         digits: '',
         firstNewPin: pin,
       })
 
       this.showDialog({
-        title: '请牢记暗号',
-        content: '暗号仅存于你的脑海，一旦遗忘，数据将随风而去。',
+        title: '请记住这串暗号',
+        content: '暗号只在你这里。忘记暗号，记录将无法找回。',
         showCancel: false,
         confirmText: '继续',
       })
@@ -142,7 +142,7 @@ Page({
     if (pin !== this.data.firstNewPin) {
       this.setData({
         stage: 'new_first',
-        title: '设置新暗号',
+        title: '设一个新暗号',
         tips: '两次输入不一致，请重新设置',
         digits: '',
         firstNewPin: '',
@@ -155,7 +155,7 @@ Page({
     if (!changed) {
       this.setData({
         stage: 'verify_old',
-        title: '验证旧暗号',
+        title: '先对旧暗号',
         tips: '验证失败，请重新输入当前暗号',
         digits: '',
         firstNewPin: '',
@@ -165,7 +165,7 @@ Page({
     }
 
     wx.showToast({
-      title: '暗号修改成功',
+      title: '新暗号已生效',
       icon: 'success',
     })
 
@@ -188,7 +188,7 @@ Page({
       return
     }
 
-    wx.showToast({ title: `暗号错误，还剩 ${result.remainingAttempts} 次`, icon: 'none' })
+    wx.showToast({ title: `暗号不对，还可再试 ${result.remainingAttempts} 次`, icon: 'none' })
   },
 
   refreshCooldown() {
@@ -218,7 +218,7 @@ Page({
   onResetNewFirstRound() {
     this.setData({
       stage: 'new_first',
-      title: '设置新暗号',
+      title: '设一个新暗号',
       tips: '请输入新的 6 位启动暗号',
       digits: '',
       firstNewPin: '',

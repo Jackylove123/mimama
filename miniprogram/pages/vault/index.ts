@@ -29,6 +29,7 @@ interface VaultSection {
 interface CategoryPanel {
   key: 'all' | VaultCategory
   sections: VaultSection[]
+  scrollable: boolean
 }
 
 interface LayoutWindowInfo {
@@ -52,6 +53,7 @@ const FILTER_PILLS: Array<{ key: 'all' | VaultCategory; label: string }> = [
 const CATEGORY_ORDER: VaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const CATEGORY_SEQUENCE: Array<'all' | VaultCategory> = ['all', ...CATEGORY_ORDER]
 const HEADER_COLLAPSE_SCROLL_TOP = 24
+const PENDING_CATEGORY_KEY = 'mimama.pendingCategory'
 const panelScrollTops: number[] = Array(CATEGORY_SEQUENCE.length).fill(0)
 
 Page({
@@ -88,6 +90,19 @@ Page({
 
     if (!ensureUnlocked('/pages/vault/index')) {
       return
+    }
+
+    const pendingCategory = this.consumePendingCategory()
+    if (pendingCategory) {
+      const index = CATEGORY_SEQUENCE.indexOf(pendingCategory)
+      if (index >= 0) {
+        this.setData({
+          activeCategory: pendingCategory,
+          currentCategoryIndex: index,
+          pillScrollIntoView: `pill-${pendingCategory}`,
+          compactHeader: panelScrollTops[index] > HEADER_COLLAPSE_SCROLL_TOP,
+        })
+      }
     }
 
     this.loadData({
@@ -175,8 +190,10 @@ Page({
   },
 
   onTapAdd() {
+    const current = this.data.activeCategory
+    const suffix = current === 'all' ? '' : `?category=${current}`
     wx.navigateTo({
-      url: '/pages/edit/index',
+      url: `/pages/edit/index${suffix}`,
     })
   },
 
@@ -349,12 +366,15 @@ Page({
     const targetIndex = CATEGORY_SEQUENCE.indexOf(targetCategory)
     const safeIndex = targetIndex >= 0 ? targetIndex : 0
     const categoryPanels = buildPanelsByCategory(cards)
+    const currentPanel = categoryPanels[safeIndex]
+    const nextCompact = currentPanel && currentPanel.scrollable ? panelScrollTops[safeIndex] > HEADER_COLLAPSE_SCROLL_TOP : false
     const animate = !(options && options.animate === false)
     const nextData: Record<string, unknown> = {
       categoryPanels,
       activeCategory: CATEGORY_SEQUENCE[safeIndex],
       currentCategoryIndex: safeIndex,
       pillScrollIntoView: `pill-${CATEGORY_SEQUENCE[safeIndex]}`,
+      compactHeader: nextCompact,
     }
 
     if (animate) {
@@ -395,6 +415,26 @@ Page({
       pagePaddingBottomPx: Math.round(pageBottom),
     })
   },
+
+  consumePendingCategory(): 'all' | VaultCategory | null {
+    let raw: unknown
+    try {
+      raw = wx.getStorageSync(PENDING_CATEGORY_KEY)
+      wx.removeStorageSync(PENDING_CATEGORY_KEY)
+    } catch (_error) {
+      return null
+    }
+
+    if (typeof raw !== 'string') {
+      return null
+    }
+
+    if (raw === 'all' || CATEGORY_ORDER.includes(raw as VaultCategory)) {
+      return raw as 'all' | VaultCategory
+    }
+
+    return null
+  },
 })
 
 const toCard = (item: VaultItem, revealedId: string): VaultCard => {
@@ -412,10 +452,14 @@ const toCard = (item: VaultItem, revealedId: string): VaultCard => {
 }
 
 const buildPanelsByCategory = (cards: VaultCard[]): CategoryPanel[] => {
-  return CATEGORY_SEQUENCE.map((categoryKey) => ({
-    key: categoryKey,
-    sections: buildSectionsByCategory(cards, categoryKey),
-  }))
+  return CATEGORY_SEQUENCE.map((categoryKey) => {
+    const sections = buildSectionsByCategory(cards, categoryKey)
+    return {
+      key: categoryKey,
+      sections,
+      scrollable: sections.length > 0,
+    }
+  })
 }
 
 const buildSectionsByCategory = (cards: VaultCard[], activeCategory: 'all' | VaultCategory): VaultSection[] => {

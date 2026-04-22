@@ -7,4 +7,11 @@
   <view class="monologue">
     我是密麻麻的开发者，我开发这款工具的初衷是因为我自己也需要一个纯本地、无污染的密码本。我承诺：代码逻辑中绝不包含任何数据上传行为，你的数据只属于你自己。请谨慎保管和定期导出备份。
   </view>
+
+  <view class="entry-card">
+    <view class="entry-row" bindtap="onTapPrivacy" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="entry-title">隐私协议</view>
+      <view class="entry-chevron">›</view>
+    </view>
+  </view>
 </view>

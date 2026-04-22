@@ -87,8 +87,7 @@
         hover-start-time="0"
         hover-stay-time="28"
       >
-        <view>{{item.label}}</view>
-        <view wx:if="{{item.key === category}}" class="sheet-check">✓</view>
+        <view class="sheet-item-label">{{item.label}}</view>
       </view>
       <view class="sheet-cancel" bindtap="onCloseCategorySheet" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">取消</view>
     </view>

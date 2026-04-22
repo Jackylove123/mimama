@@ -21,7 +21,7 @@
   </view>
 
   <scroll-view
-    class="pill-scroll {{compactHeader ? 'compact-hide' : ''}}"
+    class="pill-scroll"
     scroll-x
     enhanced="{{true}}"
     show-scrollbar="{{false}}"
@@ -60,7 +60,14 @@
       skip-hidden-item-layout="{{true}}"
     >
       <swiper-item wx:for="{{categoryPanels}}" wx:key="key" wx:for-item="panel" wx:for-index="panelIndex">
-        <scroll-view scroll-y class="panel-scroll" bindscroll="onPanelScroll" data-index="{{panelIndex}}">
+        <scroll-view
+          scroll-y="{{panel.scrollable}}"
+          enhanced="{{true}}"
+          show-scrollbar="{{false}}"
+          class="panel-scroll"
+          bindscroll="onPanelScroll"
+          data-index="{{panelIndex}}"
+        >
           <view class="panel-scroll-inner">
             <view wx:if="{{loading && panelIndex === currentCategoryIndex}}" class="hint">加载中...</view>
 

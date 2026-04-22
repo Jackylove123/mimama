@@ -1,0 +1,18 @@
+<view class="page">
+  <view class="doc">
+    <view class="doc-title">{{docTitle}}</view>
+    <view class="meta">版本更新日期：{{updateDate}}</view>
+    <view class="meta">版本生效日期：{{effectiveDate}}</view>
+
+    <view class="section-title">前言</view>
+    <view class="paragraph">{{preface}}</view>
+
+    <view class="section-title">核心原则</view>
+    <view class="quote">{{principle}}</view>
+
+    <view wx:for="{{blocks}}" wx:key="title" class="section">
+      <view class="section-title">{{item.title}}</view>
+      <view wx:for="{{item.paragraphs}}" wx:key="*this" class="paragraph">{{item}}</view>
+    </view>
+  </view>
+</view>

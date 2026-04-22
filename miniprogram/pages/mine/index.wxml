@@ -29,6 +29,9 @@
         <view class="chevron">›</view>
       </view>
     </view>
+  </view>
+
+  <view class="card backup-card">
     <view class="asset-row layer-b">
       <view class="asset-label">导入备份</view>
       <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
@@ -40,11 +43,7 @@
       <view class="asset-label">导出备份</view>
       <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
     </view>
-  </view>
-
-  <view class="warning-note">
-    <view class="warning-icon">!</view>
-    <view class="warning-text">
+    <view class="export-hint">
       密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出档案并妥善保存，这是找回记录的唯一途径。
     </view>
   </view>
@@ -52,6 +51,18 @@
   <view class="card">
     <view class="setting-row danger-row" bindtap="onTapWipe" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
       <view class="setting-title danger-title">抹除密麻麻</view>
+    </view>
+    <view class="setting-row feedback-row {{feedbackActive ? 'pressable-active' : ''}}">
+      <view class="setting-title">意见反馈</view>
+      <view class="chevron">›</view>
+      <button
+        class="feedback-overlay"
+        open-type="feedback"
+        bindtouchstart="onFeedbackTouchStart"
+        bindtouchend="onFeedbackTouchEnd"
+        bindtouchcancel="onFeedbackTouchEnd"
+        bindtap="onFeedbackTouchEnd"
+      ></button>
     </view>
     <view class="setting-row" bindtap="onTapAbout" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
       <view class="setting-title">关于密麻麻</view>
@@ -61,12 +72,12 @@
 
   <view wx:if="{{showPinSheet}}" class="overlay" bindtap="onTapPinClose">
     <view class="sheet" catchtap="noop">
-      <view class="sheet-title">输入启动暗号确认</view>
-      <view class="sheet-sub">验证通过后将执行当前操作</view>
+      <view class="sheet-title">对一下启动暗号</view>
+      <view class="sheet-sub">暗号正确后继续当前操作</view>
       <view class="dots">
         <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < pinDigits.length ? 'filled' : ''}}"></view>
       </view>
-      <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中 {{cooldownSeconds}} 秒</view>
+      <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">暗号冷却中，{{cooldownSeconds}} 秒后再试</view>
 
       <view class="keypad">
         <view wx:for="{{keypadRows}}" wx:key="index" class="row">

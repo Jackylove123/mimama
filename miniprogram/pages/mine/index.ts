@@ -2,7 +2,7 @@ import { getVaultRepository } from '../../services/vault-repository'
 import { clearSession, lockCountdownSeconds, verifyPin } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
 
-type SensitiveAction = 'export' | 'wipe' | ''
+type SensitiveAction = 'import' | 'export' | 'wipe' | ''
 type DialogState = {
   visible: boolean
   title: string
@@ -64,6 +64,7 @@ Page({
       ['', '0', 'del'],
     ],
     dialog: createDialogState(),
+    feedbackActive: false,
     navHeightPx: 32,
     pagePaddingTopPx: 88,
   },
@@ -117,6 +118,17 @@ Page({
     })
   },
 
+  onFeedbackTouchStart() {
+    this.setData({ feedbackActive: true })
+  },
+
+  onFeedbackTouchEnd() {
+    if (!this.data.feedbackActive) {
+      return
+    }
+    this.setData({ feedbackActive: false })
+  },
+
   onTapExport() {
     this.requestSensitive('export')
   },
@@ -125,42 +137,7 @@ Page({
     if (this.data.importing) {
       return
     }
-
-    this.setData({ importing: true })
-
-    try {
-      const picked = await pickTxtFile()
-      if (!picked) {
-        return
-      }
-
-      const result = await repository.importTxt(picked.path)
-      await this.openDialog({
-        title: '导入完成',
-        content: `共识别 ${result.totalCount} 条，新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，跳过 ${result.skippedCount} 条。`,
-        showCancel: false,
-        confirmText: '我知道了',
-      })
-
-      this.loadStatus()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : ''
-      if (message === 'INVALID_IMPORT_TXT') {
-        wx.showToast({
-          title: '仅支持密麻麻导出的TXT',
-          icon: 'none',
-        })
-        return
-      }
-
-      console.error('Import txt failed:', error)
-      wx.showToast({
-        title: '导入失败，请重试',
-        icon: 'none',
-      })
-    } finally {
-      this.setData({ importing: false })
-    }
+    this.requestSensitive('import')
   },
 
   async onTapWipe() {
@@ -244,7 +221,13 @@ Page({
         showPinSheet: false,
         pendingAction: '',
       })
-      this.runSensitiveAction(action)
+      void this.runSensitiveAction(action).catch((error) => {
+        console.error('Failed to run sensitive action on mine page:', error)
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none',
+        })
+      })
       return
     }
 
@@ -260,19 +243,24 @@ Page({
     if (result.code === 'PAIRING_REQUIRED') {
       void this.openDialog({
         title: '需要重置本地数据',
-        content: '暗号错误次数过多。请重新进入并设置启动暗号。',
+        content: '暗号输错次数过多。请重新进入并设一个启动暗号。',
         showCancel: false,
       })
       return
     }
 
     wx.showToast({
-      title: `暗号错误，还剩 ${result.remainingAttempts} 次`,
+      title: `暗号不对，还可再试 ${result.remainingAttempts} 次`,
       icon: 'none',
     })
   },
 
   async runSensitiveAction(action: SensitiveAction) {
+    if (action === 'import') {
+      await this.importTxt()
+      return
+    }
+
     if (action === 'export') {
       await this.exportTxt()
       return
@@ -280,6 +268,48 @@ Page({
 
     if (action === 'wipe') {
       await this.wipeAllData()
+    }
+  },
+
+  async importTxt() {
+    if (this.data.importing) {
+      return
+    }
+
+    this.setData({ importing: true })
+
+    try {
+      const picked = await pickTxtFile()
+      if (!picked) {
+        return
+      }
+
+      const result = await repository.importTxt(picked.path)
+      await this.openDialog({
+        title: '导入完成',
+        content: `共识别 ${result.totalCount} 条，新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，跳过 ${result.skippedCount} 条。`,
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+
+      this.loadStatus()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === 'INVALID_IMPORT_TXT') {
+        wx.showToast({
+          title: '仅支持密麻麻导出的TXT',
+          icon: 'none',
+        })
+        return
+      }
+
+      console.error('Import txt failed:', error)
+      wx.showToast({
+        title: '导入失败，请重试',
+        icon: 'none',
+      })
+    } finally {
+      this.setData({ importing: false })
     }
   },
 

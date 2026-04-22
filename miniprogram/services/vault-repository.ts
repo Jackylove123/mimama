@@ -1041,7 +1041,7 @@ const CATEGORY_LABEL_TO_KEY: Record<string, VaultCategory> = {
 const CATEGORY_IMPORT_RULES: Array<{ category: VaultCategory; keywords: string[] }> = [
   { category: 'social', keywords: ['社交', 'social'] },
   { category: 'email', keywords: ['邮箱', 'email'] },
-  { category: 'finance', keywords: ['支付', 'finance', 'bank'] },
+  { category: 'finance', keywords: ['财务', '支付', 'finance', 'bank'] },
   { category: 'website', keywords: ['网站', 'website', 'web'] },
   { category: 'others', keywords: ['其他', 'others'] },
 ]

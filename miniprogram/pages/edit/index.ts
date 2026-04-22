@@ -1,5 +1,5 @@
 import { getVaultRepository } from '../../services/vault-repository'
-import { CATEGORY_LABELS, CATEGORY_OPTIONS, inferCategoryByTitle } from '../../services/category-engine'
+import { CATEGORY_LABELS, CATEGORY_OPTIONS, inferCategoryByTitle, isCategory } from '../../services/category-engine'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { generatePassword } from '../../utils/password'
 import type { VaultCategory, VaultCategorySource } from '../../types/vault'
@@ -27,6 +27,7 @@ Page({
 
   onLoad(options) {
     const id = options.id as string | undefined
+    const presetCategory = options.category as string | undefined
     const pageTitle = id ? '编辑' : '添加'
     wx.setNavigationBarTitle({
       title: pageTitle,
@@ -34,6 +35,16 @@ Page({
 
     if (id) {
       this.setData({ id, isEdit: true })
+      return
+    }
+
+    if (isCategory(presetCategory)) {
+      this.setData({
+        category: presetCategory,
+        categorySource: 'default',
+        categoryLabel: CATEGORY_LABELS[presetCategory],
+        manualCategory: false,
+      })
     }
   },
 
@@ -135,24 +146,35 @@ Page({
 
     this.setData({ saving: true })
 
-    await repository.upsertItem({
-      id: this.data.id || undefined,
-      title,
-      account,
-      password,
-      note: this.data.note,
-      category: this.data.category,
-      categorySource: this.data.manualCategory ? 'manual' : this.data.categorySource,
-    })
+    try {
+      await repository.upsertItem({
+        id: this.data.id || undefined,
+        title,
+        account,
+        password,
+        note: this.data.note,
+        category: this.data.category,
+        categorySource: this.data.manualCategory ? 'manual' : this.data.categorySource,
+      })
 
-    this.setData({ saving: false })
+      try {
+        wx.setStorageSync('mimama.pendingCategory', this.data.category)
+      } catch (_error) {}
 
-    wx.showToast({
-      title: '已保存',
-      icon: 'success',
-    })
+      wx.showToast({
+        title: '已保存',
+        icon: 'success',
+      })
 
-    wx.navigateBack()
+      this.navigateAfterSave()
+    } catch (_error) {
+      wx.showToast({
+        title: '保存失败，请重试',
+        icon: 'none',
+      })
+    } finally {
+      this.setData({ saving: false })
+    }
   },
 
   async onTapDelete() {
@@ -207,6 +229,18 @@ Page({
       categorySource: item.categorySource,
       categoryLabel: CATEGORY_LABELS[item.category],
       manualCategory: item.categorySource === 'manual',
+    })
+  },
+
+  navigateAfterSave() {
+    const pages = getCurrentPages()
+    if (pages.length > 1) {
+      wx.navigateBack()
+      return
+    }
+
+    wx.switchTab({
+      url: '/pages/vault/index',
     })
   },
 })

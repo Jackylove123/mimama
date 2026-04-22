@@ -4,6 +4,7 @@
     "pages/vault/index",
     "pages/mine/index",
     "pages/about/index",
+    "pages/privacy/index",
     "pages/recycle/index",
     "pages/edit/index",
     "pages/detail/index",
@@ -47,6 +48,7 @@
     ]
   },
   "style": "v2",
+  "__usePrivacyCheck__": true,
   "componentFramework": "glass-easel",
   "lazyCodeLoading": "requiredComponents"
 }

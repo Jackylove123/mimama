@@ -8,7 +8,7 @@ export interface CategoryOption {
 export const CATEGORY_OPTIONS: CategoryOption[] = [
   { key: 'social', label: '社交' },
   { key: 'email', label: '邮箱' },
-  { key: 'finance', label: '支付' },
+  { key: 'finance', label: '财务' },
   { key: 'website', label: '网站' },
   { key: 'others', label: '其他' },
 ]
@@ -16,7 +16,7 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
 export const CATEGORY_LABELS: Record<VaultCategory, string> = {
   social: '社交',
   email: '邮箱',
-  finance: '支付',
+  finance: '财务',
   website: '网站',
   others: '其他',
 }
@@ -61,6 +61,7 @@ const KEYWORD_RULES: Array<{ category: VaultCategory; keywords: string[] }> = [
     keywords: [
       '银行',
       '支付',
+      '财务',
       '宝',
       '钱包',
       '卡',
