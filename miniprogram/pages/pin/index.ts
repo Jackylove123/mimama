@@ -199,23 +199,7 @@ Page({
   },
 
   onTapPrivacyContract() {
-    const runtime = wx as WechatMiniprogram.Wx & {
-      openPrivacyContract?: (options?: {
-        success?: () => void
-        fail?: (error: unknown) => void
-      }) => void
-    }
-
-    if (typeof runtime.openPrivacyContract === 'function') {
-      runtime.openPrivacyContract({
-        fail: (error) => {
-          console.warn('openPrivacyContract failed, fallback to privacy page:', error)
-          wx.navigateTo({ url: '/pages/privacy/index' })
-        },
-      })
-      return
-    }
-
+    // Always open in-app privacy document to keep wording/date fully controllable.
     wx.navigateTo({ url: '/pages/privacy/index' })
   },
 

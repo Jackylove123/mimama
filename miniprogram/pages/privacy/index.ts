@@ -1,5 +1,3 @@
-import { ensureUnlocked } from '../../utils/auth-guard'
-
 interface PrivacyBlock {
   title: string
   paragraphs: string[]
@@ -75,11 +73,14 @@ const PRIVACY_BLOCKS: PrivacyBlock[] = [
   },
 ]
 
+const PRIVACY_UPDATE_DATE = '2025年11月21日'
+const PRIVACY_EFFECTIVE_DATE = '2025年11月21日'
+
 Page({
   data: {
     docTitle: '《密麻麻》用户隐私保护指引',
-    updateDate: '2026年4月22日',
-    effectiveDate: '2026年4月22日',
+    updateDate: PRIVACY_UPDATE_DATE,
+    effectiveDate: PRIVACY_EFFECTIVE_DATE,
     preface:
       '密麻麻（以下简称“本小程序”）是由开发者个人开发的一款纯本地密码小程序。我们重视你的隐私与数据安全。本指引用于说明：在你使用本小程序时，我们会处理哪些信息、如何处理，以及你拥有哪些权利。',
     principle:
@@ -87,7 +88,4 @@ Page({
     blocks: PRIVACY_BLOCKS,
   },
 
-  onShow() {
-    ensureUnlocked('/pages/privacy/index')
-  },
 })

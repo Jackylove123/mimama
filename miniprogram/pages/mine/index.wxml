@@ -1,74 +1,78 @@
 <view class="page" style="padding-top: {{pagePaddingTopPx}}px;">
-  <view class="topbar" style="height: {{navHeightPx}}px;"></view>
+  <scroll-view class="content-scroll" scroll-y enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view class="content-inner">
+      <view class="topbar" style="height: {{navHeightPx}}px;"></view>
 
-  <view class="hero">
-    <image class="hero-logo" src="/assets/mimama-logo.png" mode="aspectFill" />
-    <view class="hero-title mimama-misans">密麻麻</view>
-    <view class="hero-subtitle">纯本地密码小本</view>
-    <view class="hero-pill">
-      <view class="hero-pill-dot"></view>
-      <view class="hero-pill-text">本地加密已就绪 · 只有你能开启</view>
-    </view>
-  </view>
-
-  <view class="card">
-    <view class="asset-row layer-a">
-      <view class="asset-label">记录</view>
-      <view class="asset-value">{{recordCount}} 条</view>
-    </view>
-    <view class="asset-row layer-b" bindtap="onTapRecycle" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-      <view class="asset-label">回收站</view>
-      <view class="asset-right">
-        <view class="asset-sub">{{recycleCount}} 条 · 30天保留</view>
-        <view class="chevron">›</view>
+    <view class="hero">
+      <image class="hero-logo" src="/assets/mimama-logo.png" mode="aspectFill" />
+      <view class="hero-title mimama-misans">密麻麻</view>
+      <view class="hero-subtitle">纯本地密码小本</view>
+      <view class="hero-pill">
+        <view class="hero-pill-dot"></view>
+        <view class="hero-pill-text">本地加密已就绪 · 只有你能开启</view>
       </view>
     </view>
-    <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-      <view class="asset-label">重置启动暗号</view>
-      <view class="asset-right">
-        <view class="chevron">›</view>
+
+    <view class="card">
+      <view class="asset-row layer-a">
+        <view class="asset-label">记录</view>
+        <view class="asset-value">{{recordCount}} 条</view>
+      </view>
+      <view class="asset-row layer-b" bindtap="onTapRecycle" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+        <view class="asset-label">回收站</view>
+        <view class="asset-right">
+          <view class="asset-sub">{{recycleCount}} 条 · 30天保留</view>
+          <view class="chevron">›</view>
+        </view>
+      </view>
+      <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+        <view class="asset-label">重置启动暗号</view>
+        <view class="asset-right">
+          <view class="chevron">›</view>
+        </view>
       </view>
     </view>
-  </view>
 
-  <view class="card backup-card">
-    <view class="asset-row layer-b">
-      <view class="asset-label">导入备份</view>
-      <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
-        {{importing ? '导入中' : '导入'}}
+    <view class="card backup-card">
+      <view class="asset-row layer-b">
+        <view class="asset-label">导入备份</view>
+        <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
+          {{importing ? '导入中' : '导入'}}
+        </view>
+      </view>
+      <view class="import-hint">使用备份档案，一键恢复记录。</view>
+      <view class="asset-row layer-a">
+        <view class="asset-label">导出备份</view>
+        <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
+      </view>
+      <view class="export-hint">
+        密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
       </view>
     </view>
-    <view class="import-hint">使用备份档案，一键恢复记录。</view>
-    <view class="asset-row layer-a">
-      <view class="asset-label">导出备份</view>
-      <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
-    </view>
-    <view class="export-hint">
-      密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
-    </view>
-  </view>
 
-  <view class="card">
-    <view class="setting-row danger-row" bindtap="onTapWipe" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-      <view class="setting-title danger-title">抹除密麻麻</view>
+      <view class="card">
+        <view class="setting-row danger-row" bindtap="onTapWipe" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="setting-title danger-title">抹除密麻麻</view>
+        </view>
+        <view class="setting-row feedback-row {{feedbackActive ? 'pressable-active' : ''}}">
+          <view class="setting-title">意见反馈</view>
+          <view class="chevron">›</view>
+          <button
+            class="feedback-overlay"
+            open-type="feedback"
+            bindtouchstart="onFeedbackTouchStart"
+            bindtouchend="onFeedbackTouchEnd"
+            bindtouchcancel="onFeedbackTouchEnd"
+            bindtap="onFeedbackTouchEnd"
+          ></button>
+        </view>
+        <view class="setting-row" bindtap="onTapAbout" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="setting-title">关于密麻麻</view>
+          <view class="chevron">›</view>
+        </view>
+      </view>
     </view>
-    <view class="setting-row feedback-row {{feedbackActive ? 'pressable-active' : ''}}">
-      <view class="setting-title">意见反馈</view>
-      <view class="chevron">›</view>
-      <button
-        class="feedback-overlay"
-        open-type="feedback"
-        bindtouchstart="onFeedbackTouchStart"
-        bindtouchend="onFeedbackTouchEnd"
-        bindtouchcancel="onFeedbackTouchEnd"
-        bindtap="onFeedbackTouchEnd"
-      ></button>
-    </view>
-    <view class="setting-row" bindtap="onTapAbout" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-      <view class="setting-title">关于密麻麻</view>
-      <view class="chevron">›</view>
-    </view>
-  </view>
+  </scroll-view>
 
   <view wx:if="{{showPinSheet}}" class="overlay" bindtap="onTapPinClose">
     <view class="sheet" catchtap="noop">

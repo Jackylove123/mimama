@@ -13,5 +13,9 @@
       <view class="entry-title">隐私协议</view>
       <view class="entry-chevron">›</view>
     </view>
+    <view class="entry-row entry-row-divider">
+      <view class="entry-title">版本号</view>
+      <view class="entry-value">V 1.0</view>
+    </view>
   </view>
 </view>
