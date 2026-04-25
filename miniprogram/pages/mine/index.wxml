@@ -1,5 +1,5 @@
 <view class="page" style="padding-top: {{pagePaddingTopPx}}px;">
-  <scroll-view class="content-scroll" scroll-y enhanced="{{true}}" show-scrollbar="{{false}}">
+  <scroll-view class="content-scroll" scroll-y="{{mineScrollable}}" enhanced="{{true}}" show-scrollbar="{{false}}">
     <view class="content-inner">
       <view class="topbar" style="height: {{navHeightPx}}px;"></view>
 

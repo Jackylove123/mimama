@@ -35,6 +35,7 @@ const repository = getVaultRepository()
 
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
+let scrollabilityTimer: number | undefined
 
 const createDialogState = (): DialogState => ({
   visible: false,
@@ -67,10 +68,12 @@ Page({
     feedbackActive: false,
     navHeightPx: 32,
     pagePaddingTopPx: 88,
+    mineScrollable: false,
   },
 
   onLoad() {
     this.applyAdaptiveLayout()
+    this.scheduleScrollabilityCheck()
   },
 
   onShow() {
@@ -80,7 +83,8 @@ Page({
     }
 
     this.refreshCooldown()
-    this.loadStatus()
+    void this.loadStatus()
+    this.scheduleScrollabilityCheck()
 
     const pending = wx.getStorageSync('mimama.pendingAction')
     if (pending === 'export') {
@@ -97,6 +101,10 @@ Page({
     if (dialogResolver) {
       dialogResolver(false)
       dialogResolver = undefined
+    }
+    if (scrollabilityTimer) {
+      clearTimeout(scrollabilityTimer)
+      scrollabilityTimer = undefined
     }
   },
 
@@ -406,10 +414,15 @@ Page({
   async loadStatus() {
     const status = await repository.getStatus()
 
-    this.setData({
-      recordCount: status.recordCount,
-      recycleCount: status.recycleCount,
-    })
+    this.setData(
+      {
+        recordCount: status.recordCount,
+        recycleCount: status.recycleCount,
+      },
+      () => {
+        this.scheduleScrollabilityCheck()
+      },
+    )
   },
 
   refreshCooldown() {
@@ -488,12 +501,43 @@ Page({
     const topPadding = menuRect ? menuRect.top : statusBarHeight + 8
     const navHeight = menuRect ? menuRect.height : 32
 
-    this.setData({
-      navHeightPx: Math.round(navHeight),
-      pagePaddingTopPx: Math.round(topPadding),
-    })
+    this.setData(
+      {
+        navHeightPx: Math.round(navHeight),
+        pagePaddingTopPx: Math.round(topPadding),
+      },
+      () => {
+        this.scheduleScrollabilityCheck()
+      },
+    )
   },
 
+  scheduleScrollabilityCheck() {
+    if (scrollabilityTimer) {
+      clearTimeout(scrollabilityTimer)
+      scrollabilityTimer = undefined
+    }
+
+    scrollabilityTimer = setTimeout(() => {
+      const query = wx.createSelectorQuery().in(this)
+      query.select('.content-scroll').boundingClientRect()
+      query.select('.content-inner').boundingClientRect()
+      query.exec((result) => {
+        const viewportRect = result && result[0]
+        const contentRect = result && result[1]
+        if (!viewportRect || !contentRect) {
+          return
+        }
+
+        const viewportHeight = viewportRect.height || 0
+        const contentHeight = contentRect.height || 0
+        const nextScrollable = contentHeight - viewportHeight > 1
+        if (nextScrollable !== this.data.mineScrollable) {
+          this.setData({ mineScrollable: nextScrollable })
+        }
+      })
+    }, 48)
+  },
 })
 
 const pickBackupFile = () => {
