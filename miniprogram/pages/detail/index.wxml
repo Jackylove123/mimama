@@ -11,7 +11,7 @@
     <view class="label">密码</view>
     <view class="value">{{passwordVisible ? password : maskedPassword}}</view>
     <view class="row">
-      <view class="half" bindtap="onTapTogglePassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{passwordVisible ? '立即回掩' : '显示 8 秒'}}</view>
+      <view class="half" bindtap="onTapTogglePassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">{{passwordVisible ? '立即回掩' : '瞧好了8？'}}</view>
       <view class="half" bindtap="onTapCopyPassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">复制密码</view>
     </view>
   </view>

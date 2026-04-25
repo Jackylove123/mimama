@@ -202,7 +202,8 @@ Page({
       return
     }
 
-    const scrollTop = event.detail && typeof event.detail.scrollTop === 'number' ? event.detail.scrollTop : 0
+    const rawScrollTop = event.detail && typeof event.detail.scrollTop === 'number' ? event.detail.scrollTop : 0
+    const scrollTop = Math.max(0, rawScrollTop)
     panelScrollTops[index] = scrollTop
 
     if (index !== this.data.currentCategoryIndex) {
@@ -212,6 +213,18 @@ Page({
     const nextCompact = scrollTop > HEADER_COLLAPSE_SCROLL_TOP
     if (nextCompact !== this.data.compactHeader) {
       this.setData({ compactHeader: nextCompact })
+    }
+  },
+
+  onPanelScrollToUpper(event: WechatMiniprogram.CustomEvent) {
+    const index = Number(event.currentTarget.dataset.index)
+    if (!Number.isFinite(index) || index < 0 || index >= CATEGORY_SEQUENCE.length) {
+      return
+    }
+
+    panelScrollTops[index] = 0
+    if (index === this.data.currentCategoryIndex && this.data.compactHeader) {
+      this.setData({ compactHeader: false })
     }
   },
 
@@ -636,7 +649,8 @@ Page({
 
     const fabLift = clamp(windowInfo.windowHeight * 0.08, 58, 96)
     const fabBottom = safeInsetBottom + fabLift
-    const pageBottom = fabBottom + 112
+    // Keep only a tiny visual seam above native tabbar.
+    const pageBottom = 2
 
     this.setData({
       navHeightPx: Math.round(navHeight),

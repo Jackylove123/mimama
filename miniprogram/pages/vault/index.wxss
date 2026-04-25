@@ -87,18 +87,23 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.07) 100%);
   border: 1rpx solid rgba(255, 255, 255, 0.16);
   border-radius: 22rpx;
-  height: 144rpx;
+  height: 71rpx;
+  min-height: 71rpx;
+  max-height: 71rpx;
   padding: 0 24rpx;
   display: flex;
   align-items: center;
-  transition: all 220ms ease;
+  flex: 0 0 71rpx;
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
   box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.08), 0 8rpx 20rpx rgba(0, 0, 0, 0.18);
 }
 
 .search-input-wrap {
   position: relative;
   flex: 1;
-  height: 100%;
+  height: 71rpx;
+  min-height: 71rpx;
+  max-height: 71rpx;
   display: flex;
   align-items: center;
 }
@@ -189,8 +194,8 @@
 
 .swipe-zone {
   position: relative;
-  min-height: calc(100vh - 360rpx);
-  height: calc(100vh - 360rpx);
+  flex: 1;
+  min-height: 0;
 }
 
 .drag-gesture-layer {
@@ -222,7 +227,10 @@
 }
 
 .panel-scroll-inner {
+  position: relative;
   opacity: 1;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .hint {
@@ -232,8 +240,28 @@
   font-size: 26rpx;
 }
 
+.empty-state {
+  position: relative;
+  min-height: 100%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.hint-empty {
+  position: absolute;
+  top: 33.333%;
+  left: 0;
+  right: 0;
+  margin-top: 0;
+}
+
 .list {
   margin-top: 14rpx;
+  /* keep last card above native tabbar without adding permanent black block in empty state */
+  padding-bottom: calc(132rpx + env(safe-area-inset-bottom));
 }
 
 .list-fade-0,

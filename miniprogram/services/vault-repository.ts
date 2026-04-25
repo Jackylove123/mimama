@@ -538,10 +538,10 @@ class VaultRepository {
 
   async exportTxt(): Promise<TxtExportResult> {
     const items = await this.listItems()
-    const txt = toReadableTxt(items)
+    const txt = toEncryptedBackupText(items)
     const decision = this.decideExportPolicy()
 
-    const filePath = `${ROOT_DIR}/${formatExportFilename(new Date())}.txt`
+    const filePath = `${ROOT_DIR}/${formatExportFilename(new Date())}.mmbak`
     fs.writeFileSync(filePath, txt, 'utf8')
 
     const meta = readMeta()
@@ -570,10 +570,14 @@ class VaultRepository {
       throw new Error('INVALID_IMPORT_TXT')
     }
 
-    const parsedItems = parseMimamaTxtImport(raw)
+    const parsedItems = parseMimamaImport(raw)
     const vault = this.readVaultWithSession()
     const now = Date.now()
-    const seen = new Set(vault.items.map((item) => buildDuplicateKey(item.account, item.password)))
+    const seen = new Set(
+      vault.items
+        .filter((item) => !item.deletedAt)
+        .map((item) => buildDuplicateKey(item.title, item.account, item.note)),
+    )
 
     let duplicateCount = 0
     let skippedCount = 0
@@ -590,7 +594,7 @@ class VaultRepository {
         return
       }
 
-      const key = buildDuplicateKey(account, password)
+      const key = buildDuplicateKey(title, account, note)
       if (seen.has(key)) {
         duplicateCount += 1
         return
@@ -1107,6 +1111,10 @@ const bytesToUtf8 = (bytes: Uint8Array) => {
 
 const CATEGORY_EXPORT_ORDER: VaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const IMPORT_HEADER = '密麻麻离线备份'
+const ENCRYPTED_BACKUP_HEADER = 'MIMAMA-BACKUP-1'
+const ENCRYPTED_BACKUP_END = 'MIMAMA-END'
+const ENCRYPTED_BACKUP_ALGO = 'MMX-STREAM-V1'
+const ENCRYPTED_BACKUP_MASTER_SECRET = 'mimama::backup::v1::private-format'
 const CATEGORY_LABEL_TO_KEY: Record<string, VaultCategory> = {
   [CATEGORY_LABELS.social]: 'social',
   [CATEGORY_LABELS.email]: 'email',
@@ -1122,64 +1130,49 @@ const CATEGORY_IMPORT_RULES: Array<{ category: VaultCategory; keywords: string[]
   { category: 'others', keywords: ['其他', 'others'] },
 ]
 
-const toReadableTxt = (items: VaultItem[]) => {
-  const exportAt = formatDate(Date.now())
-  const grouped = groupByCategory(items)
-  const sections: string[] = []
-
-  for (const category of CATEGORY_EXPORT_ORDER) {
-    const categoryItems = grouped[category]
-    if (!categoryItems.length) {
-      continue
-    }
-
-    const title = `【${CATEGORY_LABELS[category]}】(${categoryItems.length}条)`
-    const lines = categoryItems.map((item, index) => {
-      return [
-        `${index + 1}. ${safeText(item.title)}`,
-        `账号：${safeText(item.account)}`,
-        `密码：${safeText(item.password)}`,
-        `备注：${safeText(item.note) || '无'}`,
-        `更新：${formatDate(item.updatedAt)}`,
-        `创建：${formatDate(item.createdAt)}`,
-      ].join('\n')
-    })
-
-    sections.push([title, lines.join('\n\n')].join('\n'))
-  }
-
-  const body =
-    sections.length > 0
-      ? sections.join('\n\n----------------------------------------\n\n')
-      : '当前没有可导出的记录。'
-
-  return [
-    '密麻麻离线备份',
-    `导出时间：${exportAt}`,
-    `记录总数：${items.length} 条`,
-    '',
-    '注意：本文件包含明文账号与密码，请妥善保存，避免外泄。',
-    '',
-    body,
-    '',
-    '---- 文件结束 ----',
-  ].join('\n')
+interface EncryptedBackupPayload {
+  algo: string
+  createdAt: number
+  itemCount: number
+  items: TxtImportItem[]
 }
 
-const groupByCategory = (items: VaultItem[]) => {
-  const grouped: Record<VaultCategory, VaultItem[]> = {
-    social: [],
-    email: [],
-    finance: [],
-    website: [],
-    others: [],
+const toEncryptedBackupText = (items: VaultItem[]) => {
+  const ordered = [...items].sort((a, b) => {
+    const categoryDiff = CATEGORY_EXPORT_ORDER.indexOf(a.category) - CATEGORY_EXPORT_ORDER.indexOf(b.category)
+    if (categoryDiff !== 0) {
+      return categoryDiff
+    }
+    return b.updatedAt - a.updatedAt
+  })
+
+  const payload: EncryptedBackupPayload = {
+    algo: ENCRYPTED_BACKUP_ALGO,
+    createdAt: Date.now(),
+    itemCount: ordered.length,
+    items: ordered.map((item) => ({
+      title: safeText(item.title),
+      account: safeText(item.account),
+      password: item.password,
+      note: safeText(item.note),
+      category: item.category,
+    })),
   }
 
-  for (const item of items) {
-    grouped[item.category].push(item)
-  }
+  const salt = createRandomHex(16)
+  const key = deriveBackupKey(salt)
+  const cipher = encryptText(JSON.stringify(payload), key)
+  const check = hashText(`${ENCRYPTED_BACKUP_HEADER}:${ENCRYPTED_BACKUP_ALGO}:${salt}:${cipher}:${ENCRYPTED_BACKUP_MASTER_SECRET}`)
+  const cipherLines = chunkText(cipher, 220)
 
-  return grouped
+  return [
+    ENCRYPTED_BACKUP_HEADER,
+    `algo=${ENCRYPTED_BACKUP_ALGO}`,
+    `salt=${salt}`,
+    ...cipherLines.map((chunk, index) => (index === 0 ? `cipher=${chunk}` : `cipher+${index}=${chunk}`)),
+    `check=${check}`,
+    ENCRYPTED_BACKUP_END,
+  ].join('\n')
 }
 
 const resolveCategoryState = (
@@ -1224,16 +1217,6 @@ const countRecycleItems = (items: VaultItem[]) => {
 
 const safeText = (value: string) => value.replace(/\r?\n/g, ' ').trim()
 
-const formatDate = (timestamp: number) => {
-  const date = new Date(timestamp)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hour}:${minute}`
-}
-
 const formatDay = (date: Date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -1258,9 +1241,134 @@ interface TxtImportItem {
   category: VaultCategory
 }
 
-const parseMimamaTxtImport = (raw: string): TxtImportItem[] => {
+const parseMimamaImport = (raw: string): TxtImportItem[] => {
   const text = raw.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
-  const lines = text.split('\n')
+  const firstNonEmpty = text
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+
+  if (firstNonEmpty === ENCRYPTED_BACKUP_HEADER) {
+    return parseMimamaEncryptedImport(text)
+  }
+
+  return parseMimamaTxtImport(text)
+}
+
+const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
+  const lines = text.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+  if (!lines.length || lines[0] !== ENCRYPTED_BACKUP_HEADER) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  const tail = lines[lines.length - 1]
+  if (tail !== ENCRYPTED_BACKUP_END) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  const kv: Record<string, string> = {}
+  const cipherChunks: Array<{ index: number; value: string }> = []
+  for (let index = 1; index < lines.length - 1; index += 1) {
+    const line = lines[index]
+    const sep = line.indexOf('=')
+    if (sep <= 0) {
+      continue
+    }
+    const key = line.slice(0, sep).trim()
+    const value = line.slice(sep + 1).trim()
+    if (key) {
+      kv[key] = value
+    }
+
+    if (key === 'cipher') {
+      cipherChunks.push({ index: 0, value })
+      continue
+    }
+
+    const chunkMatch = key.match(/^cipher\+(\d+)$/)
+    if (chunkMatch) {
+      cipherChunks.push({
+        index: Number(chunkMatch[1]) || 0,
+        value,
+      })
+    }
+  }
+
+  const algo = kv.algo
+  const salt = kv.salt
+  const cipher =
+    cipherChunks.length > 0
+      ? cipherChunks
+          .sort((a, b) => a.index - b.index)
+          .map((part) => part.value)
+          .join('')
+      : kv.cipher
+  const check = kv.check
+
+  if (!algo || !salt || !cipher || !check || algo !== ENCRYPTED_BACKUP_ALGO) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  const expectedCheck = hashText(
+    `${ENCRYPTED_BACKUP_HEADER}:${ENCRYPTED_BACKUP_ALGO}:${salt}:${cipher}:${ENCRYPTED_BACKUP_MASTER_SECRET}`,
+  )
+  if (expectedCheck !== check) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  const key = deriveBackupKey(salt)
+  let payload: EncryptedBackupPayload
+  try {
+    payload = JSON.parse(decryptText(cipher, key)) as EncryptedBackupPayload
+  } catch (_error) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  if (!payload || !Array.isArray(payload.items)) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  const normalizedItems: TxtImportItem[] = []
+  payload.items.forEach((item) => {
+    if (!item || typeof item !== 'object') {
+      return
+    }
+
+    const rawItem = item as Partial<TxtImportItem>
+    const account = typeof rawItem.account === 'string' ? rawItem.account.trim() : ''
+    const password = typeof rawItem.password === 'string' ? rawItem.password : ''
+    if (!account || !password) {
+      return
+    }
+
+    const title =
+      typeof rawItem.title === 'string' && rawItem.title.trim()
+        ? rawItem.title.trim()
+        : buildImportFallbackTitle(account)
+
+    const normalizedCategory = resolveImportCategory(
+      typeof rawItem.category === 'string' ? rawItem.category : '',
+      title,
+    )
+
+    normalizedItems.push({
+      title,
+      account,
+      password,
+      note: typeof rawItem.note === 'string' ? rawItem.note.trim() : '',
+      category: normalizedCategory,
+    })
+  })
+
+  if (!normalizedItems.length) {
+    throw new Error('INVALID_IMPORT_TXT')
+  }
+
+  return normalizedItems
+}
+
+const parseMimamaTxtImport = (raw: string): TxtImportItem[] => {
+  const lines = raw.split('\n')
   const firstNonEmpty = lines.find((line) => line.trim().length > 0)
   if (!firstNonEmpty || firstNonEmpty.trim() !== IMPORT_HEADER) {
     throw new Error('INVALID_IMPORT_TXT')
@@ -1436,8 +1544,42 @@ const buildImportFallbackTitle = (account: string) => {
   return '导入记录'
 }
 
-const buildDuplicateKey = (account: string, password: string) => {
-  return `${account}\u0000${password}`
+const buildDuplicateKey = (title: string, account: string, note: string) => {
+  return `${title}\u0000${account}\u0000${note}`
+}
+
+const deriveBackupKey = (salt: string) => {
+  let seed = `${ENCRYPTED_BACKUP_MASTER_SECRET}:${salt}:${ENCRYPTED_BACKUP_ALGO}`
+  for (let round = 0; round < 2400; round += 1) {
+    seed = hashText(`${seed}:${round}`)
+  }
+
+  let key = ''
+  for (let block = 0; block < 8; block += 1) {
+    key += hashText(`${seed}:backup:${block}`)
+  }
+
+  return key
+}
+
+const chunkText = (text: string, size: number) => {
+  if (size <= 0 || text.length <= size) {
+    return [text]
+  }
+
+  const chunks: string[] = []
+  for (let index = 0; index < text.length; index += size) {
+    chunks.push(text.slice(index, index + size))
+  }
+  return chunks
+}
+
+const resolveImportCategory = (category: string, title: string): VaultCategory => {
+  if (isCategory(category)) {
+    return category
+  }
+
+  return inferCategoryByTitle(title).category
 }
 
 const fileSize = (path: string) => {

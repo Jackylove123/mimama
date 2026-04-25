@@ -6,7 +6,7 @@
     </view>
   </view>
 
-  <view class="search-box {{compactHeader ? 'compact-hide' : ''}}">
+  <view class="search-box">
     <view class="search-input-wrap">
       <input
         class="search-input"
@@ -67,12 +67,16 @@
           show-scrollbar="{{false}}"
           class="panel-scroll"
           bindscroll="onPanelScroll"
+          bindscrolltoupper="onPanelScrollToUpper"
+          upper-threshold="32"
           data-index="{{panelIndex}}"
         >
           <view class="panel-scroll-inner">
             <view wx:if="{{loading && panelIndex === currentCategoryIndex}}" class="hint">加载中...</view>
 
-            <view wx:elif="{{cards.length === 0}}" class="hint">还没有记录，点右下角“添加”开始。</view>
+            <view wx:elif="{{cards.length === 0}}" class="empty-state">
+              <view class="hint hint-empty">还没有记录，点击右下角“添加”开始。</view>
+            </view>
 
             <view wx:elif="{{panel.sections.length === 0}}" class="hint">当前分类下暂无记录。</view>
 
@@ -101,7 +105,7 @@
                   <view class="actions">
                     <view class="action {{card.revealed ? 'revealing' : ''}}" data-id="{{card.id}}" catchtap="onRevealPassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
                       <text wx:if="{{card.revealed}}">{{revealCountdown}}</text>
-                      <text wx:else>显示 8 秒</text>
+                      <text wx:else>瞧一瞧</text>
                     </view>
                     <view class="action" data-id="{{card.id}}" data-account="{{card.account}}" catchtap="onCopyAccount" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">复制账号</view>
                     <view class="action" data-id="{{card.id}}" data-password="{{card.passwordPlain}}" catchtap="onCopyPassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">复制密码</view>

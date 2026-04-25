@@ -5,6 +5,7 @@ import { generatePassword } from '../../utils/password'
 import type { VaultCategory, VaultCategorySource } from '../../types/vault'
 
 const repository = getVaultRepository()
+const NOTE_MAX_LENGTH = 200
 
 Page({
   data: {
@@ -13,12 +14,14 @@ Page({
     account: '',
     password: '',
     note: '',
+    noteMaxLength: NOTE_MAX_LENGTH,
     category: 'others' as VaultCategory,
     categorySource: 'default' as VaultCategorySource,
     categoryLabel: CATEGORY_LABELS.others,
     categoryOptions: CATEGORY_OPTIONS,
     categorySheetVisible: false,
     manualCategory: false,
+    autoCategoryEnabled: true,
     showPassword: false,
     isEdit: false,
     saving: false,
@@ -34,7 +37,11 @@ Page({
     })
 
     if (id) {
-      this.setData({ id, isEdit: true })
+      this.setData({
+        id,
+        isEdit: true,
+        autoCategoryEnabled: false,
+      })
       return
     }
 
@@ -44,8 +51,14 @@ Page({
         categorySource: 'default',
         categoryLabel: CATEGORY_LABELS[presetCategory],
         manualCategory: false,
+        autoCategoryEnabled: false,
       })
+      return
     }
+
+    this.setData({
+      autoCategoryEnabled: true,
+    })
   },
 
   onShow() {
@@ -67,17 +80,22 @@ Page({
   onInput(event: WechatMiniprogram.CustomEvent) {
     const field = event.currentTarget.dataset.field as string
     const rawValue = event.detail.value as string | undefined
-    const value = typeof rawValue === 'string' ? rawValue : ''
+    let value = typeof rawValue === 'string' ? rawValue : ''
     if (!field) {
       return
+    }
+
+    if (field === 'note') {
+      value = limitByCodePoint(value, NOTE_MAX_LENGTH)
     }
 
     const nextState: Record<string, unknown> = {
       [field]: value,
     }
 
-    if (field === 'title' && !this.data.manualCategory) {
-      const inferred = inferCategoryByTitle(value)
+    if ((field === 'title' || field === 'account') && !this.data.manualCategory && this.data.autoCategoryEnabled) {
+      const basis = `${field === 'title' ? value : this.data.title} ${field === 'account' ? value : this.data.account}`.trim()
+      const inferred = inferCategoryByTitle(basis)
       nextState.category = inferred.category
       nextState.categorySource = inferred.source
       nextState.categoryLabel = CATEGORY_LABELS[inferred.category]
@@ -256,4 +274,17 @@ const confirmDelete = () => {
       fail: () => resolve(false),
     })
   })
+}
+
+const limitByCodePoint = (value: string, max: number) => {
+  if (max <= 0) {
+    return ''
+  }
+
+  const chars = Array.from(value)
+  if (chars.length <= max) {
+    return value
+  }
+
+  return chars.slice(0, max).join('')
 }

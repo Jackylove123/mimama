@@ -39,7 +39,7 @@
     <view class="small-btn" bindtap="onGeneratePassword" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">随机生成</view>
 
     <view class="label">备注</view>
-    <textarea class="textarea" data-field="note" value="{{note}}" placeholder="可选" bindinput="onInput" />
+    <textarea class="textarea" data-field="note" value="{{note}}" maxlength="{{noteMaxLength}}" placeholder="可选" bindinput="onInput" />
   </view>
 
   <view wx:if="{{isEdit}}" class="footer-actions">

@@ -221,7 +221,7 @@ Page({
         showPinSheet: false,
         pendingAction: '',
       })
-      void this.runSensitiveAction(action).catch((error) => {
+      void this.runSensitiveAction(action, pin).catch((error) => {
         console.error('Failed to run sensitive action on mine page:', error)
         wx.showToast({
           title: '操作失败，请重试',
@@ -255,9 +255,9 @@ Page({
     })
   },
 
-  async runSensitiveAction(action: SensitiveAction) {
+  async runSensitiveAction(action: SensitiveAction, verifiedPin: string) {
     if (action === 'import') {
-      await this.importTxt()
+      await this.importTxt(verifiedPin)
       return
     }
 
@@ -271,7 +271,7 @@ Page({
     }
   },
 
-  async importTxt() {
+  async importTxt(verifiedPin: string) {
     if (this.data.importing) {
       return
     }
@@ -279,8 +279,17 @@ Page({
     this.setData({ importing: true })
 
     try {
-      const picked = await pickTxtFile()
+      const picked = await pickBackupFile()
       if (!picked) {
+        return
+      }
+
+      const recheck = await verifyPin(verifiedPin)
+      if (recheck.code !== 'OK') {
+        wx.showToast({
+          title: '暗号状态失效，请重试导入',
+          icon: 'none',
+        })
         return
       }
 
@@ -295,9 +304,18 @@ Page({
       this.loadStatus()
     } catch (error) {
       const message = error instanceof Error ? error.message : ''
+      const errMsg = (error as { errMsg?: string }).errMsg || ''
       if (message === 'INVALID_IMPORT_TXT') {
         wx.showToast({
-          title: '仅支持密麻麻导出的TXT',
+          title: '备份文件无效或已损坏',
+          icon: 'none',
+        })
+        return
+      }
+
+      if (message.includes('Vault is locked')) {
+        wx.showToast({
+          title: '导入前会话已锁定，请重试',
           icon: 'none',
         })
         return
@@ -305,7 +323,7 @@ Page({
 
       console.error('Import txt failed:', error)
       wx.showToast({
-        title: '导入失败，请重试',
+        title: errMsg.includes('cancel') ? '已取消选择' : '导入失败，请重试',
         icon: 'none',
       })
     } finally {
@@ -320,7 +338,7 @@ Page({
     if (shareResult === 'shared') {
       await this.openDialog({
         title: '导出完成',
-        content: '导出内容包含明文，请妥善保管。',
+        content: '备份已加密，请妥善保管。',
         showCancel: false,
         confirmText: '我知道了',
       })
@@ -334,7 +352,7 @@ Page({
     } else {
       await this.openDialog({
         title: '导出完成',
-        content: '备份文件已生成。导出内容包含明文，请妥善保管。',
+        content: '备份文件已生成并加密，请妥善保管。',
         showCancel: false,
         confirmText: '我知道了',
       })
@@ -356,7 +374,7 @@ Page({
     return new Promise<ShareResult>((resolve) => {
       shareFileMessage({
         filePath,
-        fileName: filePath.split('/').pop() || 'Mimama-backup.txt',
+        fileName: filePath.split('/').pop() || 'Mimama-backup.mmbak',
         success: () => resolve('shared'),
         fail: (error) => {
           const errMsg = (error as { errMsg?: string }).errMsg || ''
@@ -475,14 +493,14 @@ Page({
       pagePaddingTopPx: Math.round(topPadding),
     })
   },
+
 })
 
-const pickTxtFile = () => {
+const pickBackupFile = () => {
   return new Promise<WechatMiniprogram.ChooseFile | null>((resolve, reject) => {
     wx.chooseMessageFile({
       count: 1,
       type: 'file',
-      extension: ['txt'],
       success: (res) => {
         resolve(res.tempFiles[0] || null)
       },

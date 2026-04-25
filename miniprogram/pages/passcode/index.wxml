@@ -7,7 +7,7 @@
       <view wx:for="{{pinSlots}}" wx:key="*this" class="dot {{index < digits.length ? 'filled' : ''}}"></view>
     </view>
 
-    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">冷却中 {{cooldownSeconds}} 秒</view>
+    <view wx:if="{{cooldownSeconds > 0}}" class="cooldown">暗号输错过多，{{cooldownSeconds}} 秒后再试</view>
   </view>
 
   <view class="keypad">

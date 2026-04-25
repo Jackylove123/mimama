@@ -102,7 +102,7 @@ Page({
         this.setData({
           stage: 'new_first',
           title: '设一个新暗号',
-          tips: '请输入新的 6 位启动暗号',
+          tips: '设 6 位数字新暗号，用它打开密麻麻。',
           digits: '',
           oldPin: pin,
         })
@@ -125,7 +125,7 @@ Page({
       this.setData({
         stage: 'new_confirm',
         title: '再对一次新暗号',
-        tips: '两次一致后，重新加密本地数据',
+        tips: '两次一致后，开始本地加密保存。',
         digits: '',
         firstNewPin: pin,
       })
@@ -143,11 +143,11 @@ Page({
       this.setData({
         stage: 'new_first',
         title: '设一个新暗号',
-        tips: '两次输入不一致，请重新设置',
+        tips: '两次不一致，请重新设一个新暗号。',
         digits: '',
         firstNewPin: '',
       })
-      wx.showToast({ title: '两次输入不一致', icon: 'none' })
+      wx.showToast({ title: '两次不一致，请重设', icon: 'none' })
       return
     }
 
@@ -175,7 +175,7 @@ Page({
   handleVerifyError(result: { code: string; remainingAttempts: number }) {
     if (result.code === 'LOCKED') {
       this.refreshCooldown()
-      wx.showToast({ title: '已触发冷却，请稍后', icon: 'none' })
+      wx.showToast({ title: '暗号输错过多，请稍后再试', icon: 'none' })
       return
     }
 
@@ -219,7 +219,7 @@ Page({
     this.setData({
       stage: 'new_first',
       title: '设一个新暗号',
-      tips: '请输入新的 6 位启动暗号',
+      tips: '设 6 位数字新暗号，用它打开密麻麻。',
       digits: '',
       firstNewPin: '',
     })

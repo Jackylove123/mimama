@@ -38,7 +38,7 @@
     重置第一轮输入
   </view>
 
-  <view class="footer-note">删除小程序、清理微信数据或更换设备，未备份内容可能永久丢失。</view>
+  <view class="footer-note">删除小程序、清理微信数据或更换设备，未备份数据会永久丢失。</view>
 
   <app-dialog
     visible="{{dialog.visible}}"

@@ -44,7 +44,7 @@
       <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
     </view>
     <view class="export-hint">
-      密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出档案并妥善保存，这是找回记录的唯一途径。
+      密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
     </view>
   </view>
 

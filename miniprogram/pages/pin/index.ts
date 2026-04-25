@@ -2,6 +2,17 @@ import { hardResetVault, hasPin, lockCountdownSeconds, setPin, validatePinFormat
 
 const TAB_PAGE_ROUTES = ['/pages/vault/index', '/pages/mine/index']
 const PRIVACY_AGREED_STORAGE_KEY = 'mm_privacy_agreed_v1'
+const PRIVACY_CONSENT_ONCE_KEY = 'mm_privacy_consent_once_v1'
+
+const PIN_COPY = {
+  unlockTitle: '对一下启动暗号',
+  unlockTips: '暗号连错会进入冷却；次数过多需重置本机数据。',
+  setupTitle: '设一个启动暗号',
+  setupTips: '设 6 位数字暗号，用它打开密麻麻。',
+  setupConfirmTitle: '再对一次暗号',
+  setupConfirmTips: '两次一致后，开始本地加密保存。',
+  setupMismatchTips: '两次不一致，请重新设一个启动暗号。',
+}
 
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
@@ -28,8 +39,8 @@ const createDialogState = (): DialogState => ({
 
 Page({
   data: {
-    title: '对一下启动暗号',
-    tips: '不登录、不上传，只在本机解锁使用',
+    title: PIN_COPY.unlockTitle,
+    tips: PIN_COPY.unlockTips,
     digits: '',
     pinSlots: [0, 1, 2, 3, 4, 5],
     keypadRows: [
@@ -109,6 +120,18 @@ Page({
   noop() {},
 
   async ensurePrivacyReady() {
+    if (this.hasPrivacyConsentOnce()) {
+      return true
+    }
+
+    // Privacy popup is only needed on first-use bootstrap.
+    // Returning users should never be interrupted on each unlock.
+    const creating = !(await hasPin())
+    if (!creating) {
+      this.markPrivacyConsentOnce()
+      return true
+    }
+
     const localAgreed = this.hasLocalPrivacyAgreement()
 
     const runtime = wx as WechatMiniprogram.Wx & {
@@ -123,6 +146,7 @@ Page({
         this.openPrivacyPopup('隐私协议', false)
         return false
       }
+      this.markPrivacyConsentOnce()
       return true
     }
 
@@ -144,19 +168,17 @@ Page({
         return false
       }
 
-      if (!setting.needAuthorization) {
-        return true
-      }
+      this.markPrivacyConsentOnce()
+      return true
     } catch (error) {
       console.warn('Failed to query privacy setting, fallback to local privacy gate:', error)
       if (!localAgreed) {
         this.openPrivacyPopup('隐私协议', false)
         return false
       }
+      this.markPrivacyConsentOnce()
       return true
     }
-
-    return true
   },
 
   async bootstrapPinPage() {
@@ -169,10 +191,8 @@ Page({
     this.setData({
       pinBootstrapped: true,
       creating,
-      title: creating ? '设一个启动暗号' : '对一下启动暗号',
-      tips: creating
-        ? '设 6 位数字暗号，用它打开密麻麻。'
-        : '暗号连错会进入冷却；次数过多需重置本机数据。',
+      title: creating ? PIN_COPY.setupTitle : PIN_COPY.unlockTitle,
+      tips: creating ? PIN_COPY.setupTips : PIN_COPY.unlockTips,
     })
 
     this.refreshCooldown()
@@ -257,7 +277,7 @@ Page({
       this.setData({ digits: '' })
       this.refreshCooldown()
       wx.showToast({
-        title: '已触发 30 秒冷却',
+        title: '暗号输错过多，请稍后再试',
         icon: 'none',
       })
       return
@@ -280,8 +300,8 @@ Page({
       creating: true,
       setupStep: 1,
       firstPin: '',
-      title: '设一个启动暗号',
-      tips: '请重新设 6 位数字暗号，用它打开密麻麻。',
+      title: PIN_COPY.setupTitle,
+      tips: PIN_COPY.setupTips,
     })
   },
 
@@ -301,8 +321,8 @@ Page({
         firstPin: pin,
         digits: '',
         setupStep: 2,
-        title: '再对一次暗号',
-        tips: '两次一致后，开始本地加密保存。',
+        title: PIN_COPY.setupConfirmTitle,
+        tips: PIN_COPY.setupConfirmTips,
       })
 
       this.showDialog({
@@ -319,12 +339,12 @@ Page({
         digits: '',
         firstPin: '',
         setupStep: 1,
-        title: '设一个启动暗号',
-        tips: '两次输入不一致，请重新设置',
+        title: PIN_COPY.setupTitle,
+        tips: PIN_COPY.setupMismatchTips,
       })
 
       wx.showToast({
-        title: '两次输入不一致',
+        title: '两次不一致，请重设',
         icon: 'none',
       })
       return
@@ -344,9 +364,18 @@ Page({
       setupStep: 1,
       firstPin: '',
       digits: '',
-      title: '设一个启动暗号',
-      tips: '设 6 位数字暗号，用它打开密麻麻。',
+      title: PIN_COPY.setupTitle,
+      tips: PIN_COPY.setupTips,
     })
+  },
+
+  hasPrivacyConsentOnce() {
+    try {
+      return !!wx.getStorageSync(PRIVACY_CONSENT_ONCE_KEY)
+    } catch (error) {
+      console.warn('Failed to read privacy once state:', error)
+      return false
+    }
   },
 
   hasLocalPrivacyAgreement() {
@@ -366,6 +395,19 @@ Page({
     }
   },
 
+  savePrivacyConsentOnce() {
+    try {
+      wx.setStorageSync(PRIVACY_CONSENT_ONCE_KEY, 1)
+    } catch (error) {
+      console.warn('Failed to persist privacy once state:', error)
+    }
+  },
+
+  markPrivacyConsentOnce() {
+    this.saveLocalPrivacyAgreement()
+    this.savePrivacyConsentOnce()
+  },
+
   openPrivacyPopup(contractName: string, needOfficialAuth: boolean) {
     this.setData({
       showPrivacyPopup: true,
@@ -375,7 +417,7 @@ Page({
   },
 
   finishPrivacyAgreement() {
-    this.saveLocalPrivacyAgreement()
+    this.markPrivacyConsentOnce()
 
     this.setData({
       showPrivacyPopup: false,
