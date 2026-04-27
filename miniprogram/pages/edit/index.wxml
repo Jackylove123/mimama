@@ -8,7 +8,6 @@
       <view class="category-text">{{categoryLabel}}</view>
       <view class="category-arrow">›</view>
     </view>
-    <view class="category-hint">{{manualCategory ? '已手动指定分类，后续不会被自动规则覆盖' : '将根据标题智能识别，可手动修改'}}</view>
 
     <view class="label">账号</view>
     <input class="input" data-field="account" value="{{account}}" placeholder="手机号 / 邮箱 / 用户名" bindinput="onInput" />

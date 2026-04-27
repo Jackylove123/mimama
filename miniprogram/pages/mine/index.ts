@@ -1,5 +1,6 @@
 import { getVaultRepository } from '../../services/vault-repository'
 import { clearSession, lockCountdownSeconds, verifyPin } from '../../services/security'
+import { loadUserProfile, saveUserProfile, type UserProfileState } from '../../services/user-profile'
 import { ensureUnlocked } from '../../utils/auth-guard'
 
 type SensitiveAction = 'import' | 'export' | 'wipe' | ''
@@ -69,6 +70,9 @@ Page({
     navHeightPx: 32,
     pagePaddingTopPx: 88,
     mineScrollable: false,
+    userAvatarUrl: '/assets/mimama-logo.png',
+    userNickname: '点击微信授权登录',
+    userAuthorized: false,
   },
 
   onLoad() {
@@ -85,6 +89,7 @@ Page({
     this.refreshCooldown()
     void this.loadStatus()
     this.scheduleScrollabilityCheck()
+    this.syncUserProfile()
 
     const pending = wx.getStorageSync('mimama.pendingAction')
     if (pending === 'export') {
@@ -123,6 +128,68 @@ Page({
   onTapRecycle() {
     wx.navigateTo({
       url: '/pages/recycle/index',
+    })
+  },
+
+  onTapProfile() {
+    if (this.data.userAuthorized) {
+      wx.navigateTo({
+        url: '/pages/profile/index',
+      })
+      return
+    }
+
+    const runtime = wx as WechatMiniprogram.Wx & {
+      getUserProfile?: (options: {
+        desc: string
+        success: (res: { userInfo?: { nickName?: string; avatarUrl?: string; gender?: number } }) => void
+        fail?: (error: unknown) => void
+      }) => void
+    }
+
+    if (typeof runtime.getUserProfile !== 'function') {
+      wx.showToast({
+        title: '当前微信版本不支持授权',
+        icon: 'none',
+      })
+      return
+    }
+
+    runtime.getUserProfile({
+      desc: '用于完善个人信息展示',
+      success: (res) => {
+        const local = loadUserProfile()
+        const userInfo = res.userInfo || {}
+        const genderMap: Record<number, string> = {
+          1: '男',
+          2: '女',
+          0: '未设置',
+        }
+
+        const next: UserProfileState = {
+          ...local,
+          authorized: true,
+          avatarUrl: userInfo.avatarUrl || local.avatarUrl,
+          nickname: userInfo.nickName || local.nickname,
+          gender: genderMap[userInfo.gender || 0] || local.gender,
+        }
+
+        saveUserProfile(next)
+        this.syncUserProfile()
+        wx.navigateTo({
+          url: '/pages/profile/index',
+        })
+      },
+      fail: (error) => {
+        const errMsg = (error as { errMsg?: string }).errMsg || ''
+        if (errMsg.includes('cancel')) {
+          return
+        }
+        wx.showToast({
+          title: '授权失败，请重试',
+          icon: 'none',
+        })
+      },
     })
   },
 
@@ -510,6 +577,15 @@ Page({
         this.scheduleScrollabilityCheck()
       },
     )
+  },
+
+  syncUserProfile() {
+    const profile = loadUserProfile()
+    this.setData({
+      userAvatarUrl: profile.avatarUrl,
+      userNickname: profile.nickname,
+      userAuthorized: profile.authorized,
+    })
   },
 
   scheduleScrollabilityCheck() {

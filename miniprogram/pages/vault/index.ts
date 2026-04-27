@@ -268,6 +268,12 @@ Page({
       return
     }
 
+    if (id === this.data.revealedId) {
+      this.hideRevealedPassword()
+      this.clearRevealTimer()
+      return
+    }
+
     this.setData({
       revealedId: id,
       revealCountdown: REVEAL_SECONDS,

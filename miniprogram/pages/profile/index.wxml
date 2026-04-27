@@ -1,0 +1,35 @@
+<view class="page">
+  <view class="hero-card">
+    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image class="avatar" src="{{avatarUrl}}" mode="aspectFill" />
+    </button>
+    <view class="avatar-tip">点击头像可修改</view>
+  </view>
+
+  <view class="info-card">
+    <view class="info-row">
+      <view class="label">昵称</view>
+      <input class="value-input" value="{{nickname}}" placeholder="请输入昵称" maxlength="20" bindinput="onInputNickname" />
+    </view>
+    <view class="info-row">
+      <view class="label">ID</view>
+      <view class="value">{{numberId}}</view>
+    </view>
+    <picker class="info-row" mode="selector" range="{{genderOptions}}" value="{{genderIndex}}" bindchange="onGenderChange">
+      <view class="label">性别</view>
+      <view class="value">{{gender}}</view>
+    </picker>
+    <view class="motto-block">
+      <view class="label">座右铭</view>
+      <textarea
+        class="motto-input"
+        value="{{motto}}"
+        maxlength="60"
+        placeholder="写一句你喜欢的话"
+        bindinput="onInputMotto"
+      />
+    </view>
+  </view>
+
+  <view class="save-btn" bindtap="onTapSave" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">保存资料</view>
+</view>

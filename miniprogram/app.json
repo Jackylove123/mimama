@@ -3,6 +3,7 @@
     "pages/pin/index",
     "pages/vault/index",
     "pages/mine/index",
+    "pages/profile/index",
     "pages/about/index",
     "pages/privacy/index",
     "pages/recycle/index",

@@ -1,11 +1,7 @@
 <view class="page">
   <view class="hero">
     <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
-    <view class="brand-name brand-word">密麻麻</view>
-  </view>
-
-  <view class="monologue">
-    我是密麻麻的开发者，我开发这款工具的初衷是因为我自己也需要一个纯本地、无污染的密码本。我承诺：代码逻辑中绝不包含任何数据上传行为，你的数据只属于你自己。请谨慎保管和定期导出备份。
+    <view class="brand-name brand-word">瞬刻shunote</view>
   </view>
 
   <view class="entry-card">
