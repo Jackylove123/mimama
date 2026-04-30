@@ -1154,7 +1154,7 @@ const toEncryptedBackupText = (items: VaultItem[]) => {
       title: safeText(item.title),
       account: safeText(item.account),
       password: item.password,
-      note: safeText(item.note),
+      note: safeMultilineText(item.note),
       category: item.category,
     })),
   }
@@ -1216,6 +1216,10 @@ const countRecycleItems = (items: VaultItem[]) => {
 }
 
 const safeText = (value: string) => value.replace(/\r?\n/g, ' ').trim()
+
+const safeMultilineText = (value: string) => value.replace(/\r\n?/g, '\n').trim()
+
+const normalizeDuplicateText = (value: string) => value.replace(/\s+/g, ' ').trim()
 
 const formatDay = (date: Date) => {
   const year = date.getFullYear()
@@ -1355,7 +1359,7 @@ const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
       title,
       account,
       password,
-      note: typeof rawItem.note === 'string' ? rawItem.note.trim() : '',
+      note: typeof rawItem.note === 'string' ? safeMultilineText(rawItem.note) : '',
       category: normalizedCategory,
     })
   })
@@ -1545,7 +1549,7 @@ const buildImportFallbackTitle = (account: string) => {
 }
 
 const buildDuplicateKey = (title: string, account: string, note: string) => {
-  return `${title}\u0000${account}\u0000${note}`
+  return `${normalizeDuplicateText(title)}\u0000${normalizeDuplicateText(account)}\u0000${normalizeDuplicateText(note)}`
 }
 
 const deriveBackupKey = (salt: string) => {

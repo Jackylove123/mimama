@@ -72,7 +72,7 @@ async function main() {
       title: i % 2 === 0 ? `微信-${i}` : `邮箱-${i}`,
       account: `acc_${i}`,
       password: `pw_${i}`,
-      note: i % 3 === 0 ? 'note-hit' : '',
+      note: i === 0 ? 'note-hit\nsecond line' : i % 3 === 0 ? 'note-hit' : '',
     })
     ids.push(id)
   }
