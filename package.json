@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
+    "qa:oversize": "node qa/find-oversize-assets.js",
+    "qa:packscope": "node qa/find-pack-scope-oversize.js",
+    "qa:refmedia": "node qa/find-referenced-media.js"
   },
   "keywords": [],
   "author": "",

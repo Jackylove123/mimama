@@ -1,7 +1,7 @@
 <view class="page">
   <view class="hero">
     <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
-    <view class="brand-name brand-word">瞬刻shunote</view>
+    <image class="brand-title-image" src="/assets/mimama-title.png" mode="widthFix" />
   </view>
 
   <view class="entry-card">

@@ -7,11 +7,11 @@ export interface UserProfileState {
   motto: string
 }
 
-const USER_PROFILE_KEY = 'shunote.user.profile.v1'
+const USER_PROFILE_KEY = 'mimama.user.profile.v1'
 const DEFAULT_AVATAR = '/assets/mimama-logo.png'
 const DEFAULT_NICKNAME = '点击微信授权登录'
 const DEFAULT_GENDER = '未设置'
-const DEFAULT_MOTTO = '把重要信息记在瞬刻里。'
+const DEFAULT_MOTTO = '把重要信息记在密麻麻里。'
 
 const createNumberId = () => {
   const now = Date.now().toString().slice(-6)

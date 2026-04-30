@@ -3,54 +3,52 @@
     <view class="content-inner">
       <view class="topbar" style="height: {{navHeightPx}}px;"></view>
 
-    <view class="hero">
-      <view class="profile-entry" bindtap="onTapProfile" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-        <image class="hero-logo" src="{{userAvatarUrl}}" mode="aspectFill" />
-        <view class="hero-title">{{userNickname}}</view>
+      <view class="hero">
+        <image class="hero-logo" src="/assets/mimama-logo.png" mode="aspectFill" />
+        <image class="hero-title-image" src="/assets/mimama-title.png" mode="widthFix" />
+        <view class="hero-subtitle">密码只存本地，更安心</view>
+        <view class="hero-pill">
+          <view class="hero-pill-dot"></view>
+          <view class="hero-pill-text">本地加密已就绪 · 只有你能开启</view>
+        </view>
       </view>
-      <view class="hero-subtitle">{{userAuthorized ? '点击进入个人信息' : '点击头像和昵称完成微信授权'}}</view>
-      <view class="hero-pill">
-        <view class="hero-pill-dot"></view>
-        <view class="hero-pill-text">本地加密已就绪 · 只有你能开启</view>
-      </view>
-    </view>
 
-    <view class="card">
-      <view class="asset-row layer-a">
-        <view class="asset-label">记录</view>
-        <view class="asset-value">{{recordCount}} 条</view>
-      </view>
-      <view class="asset-row layer-b" bindtap="onTapRecycle" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-        <view class="asset-label">回收站</view>
-        <view class="asset-right">
-          <view class="asset-sub">{{recycleCount}} 条 · 30天保留</view>
-          <view class="chevron">›</view>
+      <view class="card">
+        <view class="asset-row layer-a">
+          <view class="asset-label">记录</view>
+          <view class="asset-value">{{recordCount}} 条</view>
+        </view>
+        <view class="asset-row layer-b" bindtap="onTapRecycle" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="asset-label">回收站</view>
+          <view class="asset-right">
+            <view class="asset-sub">{{recycleCount}} 条 · 30天保留</view>
+            <view class="chevron">›</view>
+          </view>
+        </view>
+        <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="asset-label">重置启动暗号</view>
+          <view class="asset-right">
+            <view class="chevron">›</view>
+          </view>
         </view>
       </view>
-      <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-        <view class="asset-label">重置启动暗号</view>
-        <view class="asset-right">
-          <view class="chevron">›</view>
-        </view>
-      </view>
-    </view>
 
-    <view class="card backup-card">
-      <view class="asset-row layer-a">
-        <view class="asset-label">导入备份</view>
-        <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
-          {{importing ? '导入中' : '导入'}}
+      <view class="card backup-card">
+        <view class="asset-row layer-a">
+          <view class="asset-label">导入备份</view>
+          <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
+            {{importing ? '导入中' : '导入'}}
+          </view>
+        </view>
+        <view class="import-hint">使用备份档案，一键恢复记录。</view>
+        <view class="asset-row layer-a">
+          <view class="asset-label">导出备份</view>
+          <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
+        </view>
+        <view class="export-hint">
+          密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
         </view>
       </view>
-      <view class="import-hint">使用备份档案，一键恢复记录。</view>
-      <view class="asset-row layer-a">
-        <view class="asset-label">导出备份</view>
-        <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
-      </view>
-      <view class="export-hint">
-        密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
-      </view>
-    </view>
 
       <view class="card">
         <view class="setting-row danger-row" bindtap="onTapWipe" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">

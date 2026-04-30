@@ -46,6 +46,7 @@ const DRAG_SWAP_MIN_INTERVAL_MS = 140
 const DRAG_FOLLOW_FACTOR = 0.84
 const DRAG_OVERFLOW_FACTOR = 0.36
 let revealTimer: number | undefined
+let searchDebounceTimer: number | undefined
 
 const FILTER_PILLS: Array<{ key: 'all' | VaultCategory; label: string }> = [
   { key: 'all', label: '全部' },
@@ -126,12 +127,14 @@ Page({
   onUnload() {
     this.hideRevealedPassword()
     this.clearRevealTimer()
+    this.clearSearchDebounceTimer()
     this.stopDragging()
   },
 
   onHide() {
     this.hideRevealedPassword()
     this.clearRevealTimer()
+    this.clearSearchDebounceTimer()
     this.stopDragging()
   },
 
@@ -153,12 +156,12 @@ Page({
       query: nextQuery,
     })
 
-    this.loadCards()
+    this.scheduleLoadCards()
   },
 
   onClearQuery() {
     this.setData({ query: '' })
-    this.loadCards()
+    this.scheduleLoadCards(0)
   },
 
   onTapCategory(event: WechatMiniprogram.BaseEvent) {
@@ -336,8 +339,15 @@ Page({
     }
 
     try {
-      await Promise.all([this.loadCards(animate), this.loadReminder()])
+      // Load cards first to reduce startup blocking risk on large datasets.
+      await this.loadCards(animate)
       this.setData({ loadedOnce: true })
+      // Reminder can be loaded lazily without blocking first meaningful paint.
+      setTimeout(() => {
+        void this.loadReminder().catch((error) => {
+          console.warn('Failed to load backup reminder:', error)
+        })
+      }, 0)
     } catch (error) {
       console.error('Failed to load vault page data:', error)
       wx.showToast({
@@ -388,6 +398,21 @@ Page({
       clearInterval(revealTimer)
       revealTimer = undefined
     }
+  },
+
+  clearSearchDebounceTimer() {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = undefined
+    }
+  },
+
+  scheduleLoadCards(delay = 180) {
+    this.clearSearchDebounceTimer()
+    searchDebounceTimer = setTimeout(() => {
+      this.loadCards()
+      searchDebounceTimer = undefined
+    }, Math.max(0, delay))
   },
 
   hideRevealedPassword() {

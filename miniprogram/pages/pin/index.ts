@@ -6,7 +6,7 @@ const PRIVACY_CONSENT_ONCE_KEY = 'mm_privacy_consent_once_v1'
 
 const PIN_COPY = {
   unlockTitle: '对一下启动暗号',
-  unlockTips: '暗号连错会进入冷却；次数过多需重置本机数据。',
+  unlockTips: '',
   setupTitle: '设一个启动暗号',
   setupTips: '设 6 位数字暗号，用它打开密麻麻。',
   setupConfirmTitle: '再对一次暗号',
@@ -209,14 +209,19 @@ Page({
       icon: 'none',
     })
 
-    setTimeout(() => {
-      const runtime = wx as WechatMiniprogram.Wx & {
-        exitMiniProgram?: () => void
-      }
-      if (typeof runtime.exitMiniProgram === 'function') {
-        runtime.exitMiniProgram()
-      }
-    }, 420)
+    const runtime = wx as WechatMiniprogram.Wx & {
+      exitMiniProgram?: (options?: {
+        success?: () => void
+        fail?: (error: unknown) => void
+      }) => void
+    }
+    if (typeof runtime.exitMiniProgram === 'function') {
+      runtime.exitMiniProgram({
+        fail: (error) => {
+          console.warn('exitMiniProgram failed:', error)
+        },
+      })
+    }
   },
 
   onAgreePrivacyTap() {

@@ -9,6 +9,12 @@
 .brand {
   margin-bottom: 22rpx;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.brand-row {
+  display: flex;
   align-items: center;
 }
 
@@ -22,11 +28,23 @@
   box-shadow: 0 0 0 2rpx rgba(255, 255, 255, 0.12), 0 12rpx 26rpx rgba(0, 0, 0, 0.35);
 }
 
-.brand-name {
-  margin-left: 14rpx;
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #f5f6fa;
+.brand-title-image {
+  margin-left: 2rpx;
+  width: 224rpx;
+  display: block;
+}
+
+.brand-tagline {
+  margin-top: 8rpx;
+  color: #bcc3d0;
+  width: 314rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card {

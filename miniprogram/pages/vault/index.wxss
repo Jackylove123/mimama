@@ -37,6 +37,12 @@
   box-shadow: 0 0 0 2rpx rgba(255, 255, 255, 0.12), 0 10rpx 22rpx rgba(0, 0, 0, 0.3);
 }
 
+.brand-title-image {
+  width: 196rpx;
+  margin-left: 0;
+  display: block;
+}
+
 .brand-name {
   margin-left: 14rpx;
   color: #f7f8fb;

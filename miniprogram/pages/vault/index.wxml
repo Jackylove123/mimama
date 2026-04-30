@@ -1,8 +1,7 @@
 <view class="page" style="padding-top: {{pagePaddingTopPx}}px; padding-bottom: {{pagePaddingBottomPx}}px;">
   <view class="topbar" style="height: {{navHeightPx}}px;">
     <view class="brand-left">
-      <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
-      <view class="brand-name mimama-misans">密麻麻</view>
+      <image class="brand-title-image" src="/assets/mimama-title.png" mode="widthFix" />
     </view>
   </view>
 

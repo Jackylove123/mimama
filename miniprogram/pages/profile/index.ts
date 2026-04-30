@@ -6,7 +6,7 @@ const GENDER_OPTIONS = ['未设置', '男', '女', '其他']
 Page({
   data: {
     avatarUrl: '/assets/mimama-logo.png',
-    nickname: '瞬刻用户',
+    nickname: '密麻麻用户',
     numberId: 'numberID',
     gender: '未设置',
     motto: '',
@@ -57,7 +57,7 @@ Page({
   onTapSave() {
     const current = loadUserProfile()
     const nickname = this.data.nickname.trim() || current.nickname
-    const motto = this.data.motto.trim() || '把重要信息记在瞬刻里。'
+    const motto = this.data.motto.trim() || '把重要信息记在密麻麻里。'
 
     const next: UserProfileState = {
       ...current,
