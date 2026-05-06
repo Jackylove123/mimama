@@ -1,0 +1,21 @@
+{
+  "desc": "密麻麻页面收录配置。默认不收录私密页，只开放适合搜索落地的公开页。",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "pages/pin/index"
+    },
+    {
+      "action": "allow",
+      "page": "pages/about/index"
+    },
+    {
+      "action": "allow",
+      "page": "pages/privacy/index"
+    },
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}

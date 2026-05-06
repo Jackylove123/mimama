@@ -15,18 +15,29 @@
   justify-content: center;
 }
 
+.logo-shell {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0));
+  box-shadow: 0 18rpx 48rpx rgba(0, 0, 0, 0.22);
+}
+
 .logo-image {
-  width: 84rpx;
-  height: 84rpx;
-  border-radius: 21rpx;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 24rpx;
   display: block;
   border: 1rpx solid rgba(255, 255, 255, 0.28);
   box-shadow: 0 0 0 2rpx rgba(255, 255, 255, 0.12), 0 14rpx 30rpx rgba(0, 0, 0, 0.3);
 }
 
 .brand-title-image {
-  margin-top: 20rpx;
-  width: 250rpx;
+  margin-top: 28rpx;
+  width: 288rpx;
   display: block;
 }
 
@@ -58,6 +69,12 @@
 .entry-value {
   color: #9ca3b1;
   font-size: 26rpx;
+}
+
+.entry-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
 }
 
 .entry-chevron {

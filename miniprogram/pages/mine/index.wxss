@@ -258,6 +258,108 @@
   border-top: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
+.share-gate-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(4, 6, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.share-gate-panel {
+  width: 100%;
+  max-width: 640rpx;
+  border-radius: 28rpx;
+  padding: 34rpx 28rpx 30rpx;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(26, 28, 35, 0.98), rgba(16, 17, 23, 0.98));
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 22rpx 60rpx rgba(0, 0, 0, 0.42);
+}
+
+.share-gate-title {
+  color: #f8fafc;
+  font-size: 34rpx;
+  font-weight: 700;
+  text-align: center;
+}
+
+.share-gate-desc {
+  margin-top: 12rpx;
+  color: #d8dce6;
+  font-size: 24rpx;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.share-gate-safe-note {
+  margin-top: 8rpx;
+  color: #8f96a6;
+  font-size: 22rpx;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.share-gate-image {
+  width: 100%;
+  height: 360rpx;
+  margin-top: 20rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.share-gate-actions {
+  margin-top: 24rpx;
+  display: flex;
+  gap: 16rpx;
+}
+
+.share-gate-btn {
+  flex: 1;
+  height: 84rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.share-gate-btn::after {
+  border: 0 !important;
+}
+
+.share-gate-share {
+  background: linear-gradient(135deg, #f4f6fb, #e7ecf6);
+  color: #14161c;
+}
+
+.share-gate-export-ready {
+  margin-top: 18rpx;
+  width: 100%;
+  height: 88rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #9b72ff, #ea6ad7);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 700;
+  box-shadow: 0 14rpx 34rpx rgba(155, 114, 255, 0.28);
+}
+
+.share-gate-export-ready::after {
+  border: 0 !important;
+}
+
+
 .setting-title {
   color: #e3e6ee;
   font-size: 27rpx;

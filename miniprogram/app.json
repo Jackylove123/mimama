@@ -49,6 +49,7 @@
     ]
   },
   "style": "v2",
+  "sitemapLocation": "sitemap.json",
   "__usePrivacyCheck__": true,
   "componentFramework": "glass-easel",
   "lazyCodeLoading": "requiredComponents"

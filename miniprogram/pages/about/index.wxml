@@ -1,6 +1,8 @@
 <view class="page">
   <view class="hero">
-    <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
+    <view class="logo-shell">
+      <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
+    </view>
     <image class="brand-title-image" src="/assets/mimama-title.png" mode="widthFix" />
   </view>
 
@@ -9,9 +11,12 @@
       <view class="entry-title">隐私协议</view>
       <view class="entry-chevron">›</view>
     </view>
-    <view class="entry-row entry-row-divider">
-      <view class="entry-title">版本号</view>
-      <view class="entry-value">V 1.0</view>
+    <view class="entry-row entry-row-divider" bindtap="onTapVersion" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+      <view class="entry-title">版本信息</view>
+      <view class="entry-value-wrap">
+        <view class="entry-value">V 1.0</view>
+        <view class="entry-chevron">›</view>
+      </view>
     </view>
   </view>
 </view>

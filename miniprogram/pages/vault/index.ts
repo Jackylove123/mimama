@@ -59,6 +59,9 @@ const CATEGORY_ORDER: VaultCategory[] = ['social', 'email', 'finance', 'website'
 const CATEGORY_SEQUENCE: Array<'all' | VaultCategory> = ['all', ...CATEGORY_ORDER]
 const HEADER_COLLAPSE_SCROLL_TOP = 24
 const PENDING_CATEGORY_KEY = 'mimama.pendingCategory'
+const SHARE_TITLE = '密麻麻｜本地密码管理工具'
+const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
+const SHARE_IMAGE = '/assets/mimama-share.png'
 const panelScrollTops: number[] = Array(CATEGORY_SEQUENCE.length).fill(0)
 
 Page({
@@ -96,6 +99,34 @@ Page({
 
   onLoad() {
     this.applyAdaptiveLayout()
+    this.setupShareMenu()
+  },
+
+  setupShareMenu() {
+    if (typeof wx.showShareMenu !== 'function') {
+      return
+    }
+
+    wx.showShareMenu({
+      withShareTicket: false,
+      menus: ['shareAppMessage', 'shareTimeline'],
+    })
+  },
+
+  onShareAppMessage() {
+    return {
+      title: SHARE_TITLE,
+      path: SHARE_PATH,
+      imageUrl: SHARE_IMAGE,
+    }
+  },
+
+  onShareTimeline() {
+    return {
+      title: SHARE_TITLE,
+      query: 'redirect=%2Fpages%2Fvault%2Findex',
+      imageUrl: SHARE_IMAGE,
+    }
   },
 
   onShow() {

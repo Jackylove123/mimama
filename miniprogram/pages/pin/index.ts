@@ -3,6 +3,9 @@ import { hardResetVault, hasPin, lockCountdownSeconds, setPin, validatePinFormat
 const TAB_PAGE_ROUTES = ['/pages/vault/index', '/pages/mine/index']
 const PRIVACY_AGREED_STORAGE_KEY = 'mm_privacy_agreed_v1'
 const PRIVACY_CONSENT_ONCE_KEY = 'mm_privacy_consent_once_v1'
+const SHARE_TITLE = '密麻麻｜本地密码管理工具'
+const SHARE_PATH = '/pages/pin/index'
+const SHARE_IMAGE = '/assets/mimama-share.png'
 
 const PIN_COPY = {
   unlockTitle: '对一下启动暗号',
@@ -62,6 +65,7 @@ Page({
   },
 
   async onLoad(options) {
+    this.setupShareMenu()
     this.setData({
       redirectPath: normalizeRedirect(options.redirect),
     })
@@ -118,6 +122,32 @@ Page({
   },
 
   noop() {},
+
+  setupShareMenu() {
+    if (typeof wx.showShareMenu !== 'function') {
+      return
+    }
+
+    wx.showShareMenu({
+      withShareTicket: false,
+      menus: ['shareAppMessage', 'shareTimeline'],
+    })
+  },
+
+  onShareAppMessage() {
+    return {
+      title: SHARE_TITLE,
+      path: SHARE_PATH,
+      imageUrl: SHARE_IMAGE,
+    }
+  },
+
+  onShareTimeline() {
+    return {
+      title: SHARE_TITLE,
+      imageUrl: SHARE_IMAGE,
+    }
+  },
 
   async ensurePrivacyReady() {
     if (this.hasPrivacyConsentOnce()) {
