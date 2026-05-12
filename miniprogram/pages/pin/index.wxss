@@ -53,6 +53,7 @@
   padding: 44rpx 36rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8rpx);
+  box-shadow: 0 16rpx 42rpx rgba(0, 0, 0, 0.22);
 }
 
 .title {
@@ -96,6 +97,51 @@
   margin-top: 18rpx;
   color: #9aa0ad;
   font-size: 22rpx;
+}
+
+.timeline-landing .title {
+  font-size: 56rpx;
+  line-height: 1.25;
+}
+
+.timeline-landing .tips {
+  margin-top: 24rpx;
+  color: #b5bcc8;
+  font-size: 28rpx;
+  line-height: 1.7;
+}
+
+.timeline-divider {
+  margin-top: 34rpx;
+  height: 1rpx;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.timeline-tip {
+  margin-top: 34rpx;
+  color: #3f84ff;
+  font-size: 31rpx;
+  font-weight: 600;
+  line-height: 1.62;
+}
+
+.timeline-trust-row {
+  margin-top: 28rpx;
+  display: flex;
+  align-items: center;
+}
+
+.timeline-trust-icon {
+  margin-right: 12rpx;
+  color: #989fad;
+  font-size: 26rpx;
+  line-height: 1;
+}
+
+.timeline-trust {
+  color: #a8b0bf;
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .keypad {

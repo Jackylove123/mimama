@@ -1,5 +1,16 @@
-export type VaultCategory = 'social' | 'email' | 'finance' | 'website' | 'others'
+export type SystemVaultCategory = 'social' | 'email' | 'finance' | 'website' | 'others'
+export type VaultCategory = string
 export type VaultCategorySource = 'manual' | 'icon' | 'keyword' | 'default'
+
+export interface VaultCategoryDefinition {
+  id: VaultCategory
+  key: VaultCategory
+  label: string
+  source: 'system' | 'custom'
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
 
 export interface VaultItem {
   id: string
@@ -7,6 +18,7 @@ export interface VaultItem {
   account: string
   password: string
   note: string
+  categoryId: VaultCategory
   category: VaultCategory
   categorySource: VaultCategorySource
   sortOrder?: number
@@ -22,6 +34,7 @@ export interface VaultItemInput {
   account: string
   password: string
   note?: string
+  categoryId?: VaultCategory
   category?: VaultCategory
   categorySource?: VaultCategorySource
 }

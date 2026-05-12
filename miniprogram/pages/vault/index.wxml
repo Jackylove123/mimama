@@ -1,4 +1,9 @@
 <view class="page" style="padding-top: {{pagePaddingTopPx}}px; padding-bottom: {{pagePaddingBottomPx}}px;">
+  <block wx:if="{{singlePageMode}}">
+    <timeline-landing />
+  </block>
+
+  <block wx:else>
   <view class="topbar" style="height: {{navHeightPx}}px;">
     <view class="brand-left">
       <image class="brand-title-image" src="/assets/mimama-title.png" mode="widthFix" />
@@ -52,14 +57,13 @@
   <view class="swipe-zone">
     <swiper
       class="category-swiper"
-      current="{{currentCategoryIndex}}"
+      current-item-id="{{activeCategory}}"
       disable-touch="{{isDragging}}"
       bindchange="onSwiperChange"
       duration="300"
       easing-function="easeOutCubic"
-      skip-hidden-item-layout="{{true}}"
     >
-      <swiper-item wx:for="{{categoryPanels}}" wx:key="key" wx:for-item="panel" wx:for-index="panelIndex">
+      <swiper-item wx:for="{{categoryPanels}}" wx:key="key" wx:for-item="panel" wx:for-index="panelIndex" item-id="{{panel.key}}">
         <scroll-view
           scroll-y="{{panel.scrollable && !draggingId}}"
           enhanced="{{true}}"
@@ -90,7 +94,7 @@
                   class="card {{draggingId === card.id ? 'card-dragging' : ''}}"
                   style="{{draggingId === card.id ? dragStyle : ''}}"
                   data-id="{{card.id}}"
-                  data-category="{{card.category}}"
+                  data-category="{{card.categoryId}}"
                   bindtap="onOpenDetail"
                   bindlongpress="onCardLongPress"
                   bindtouchmove="onCardTouchMove"
@@ -136,4 +140,5 @@
   >
     <text class="fab-plus">+</text>
   </view>
+  </block>
 </view>

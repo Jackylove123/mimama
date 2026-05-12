@@ -1,9 +1,9 @@
 import { getVaultRepository } from '../../services/vault-repository'
 import { clearSession, lockCountdownSeconds, verifyPin } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
+import { isTimelineSinglePageMode } from '../../utils/timeline-mode'
 
 type SensitiveAction = 'import' | 'export' | 'wipe' | ''
-type ExportStage = 'idle' | 'shareGate' | 'sharingBackup'
 type DialogState = {
   visible: boolean
   title: string
@@ -43,15 +43,10 @@ const repository = getVaultRepository()
 const SHARE_TITLE = '密麻麻｜本地密码管理工具'
 const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
 const SHARE_IMAGE = '/assets/mimama-share.png'
-const EXPORT_RECOMMEND_GATE_COUNT_KEY = 'mimama.exportRecommendGateCount'
-const EXPORT_RECOMMEND_GATE_MAX = 5
-const EXPORT_RECOMMEND_GATE_RECORD_THRESHOLD = 10
 
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
 let scrollabilityTimer: number | undefined
-let verifiedExportPin = ''
-let pendingExportShare = false
 
 const createDialogState = (): DialogState => ({
   visible: false,
@@ -82,17 +77,17 @@ Page({
     ],
     dialog: createDialogState(),
     feedbackActive: false,
-    exportStage: 'idle' as ExportStage,
-    exportShareReady: false,
     navHeightPx: 32,
     pagePaddingTopPx: 88,
     mineScrollable: false,
+    singlePageMode: false,
   },
 
   onLoad() {
     this.applyAdaptiveLayout()
     this.scheduleScrollabilityCheck()
     this.setupShareMenu()
+    this.syncEntryMode()
   },
 
   setupShareMenu() {
@@ -126,13 +121,12 @@ Page({
 
   onShow() {
     this.applyAdaptiveLayout()
-    if (!ensureUnlocked('/pages/mine/index')) {
+    if (this.syncEntryMode()) {
       return
     }
 
-    if (this.data.exportStage === 'shareGate' && pendingExportShare) {
-      pendingExportShare = false
-      this.markExportShareReady()
+    if (!ensureUnlocked('/pages/mine/index')) {
+      return
     }
 
     this.refreshCooldown()
@@ -155,8 +149,6 @@ Page({
       dialogResolver(false)
       dialogResolver = undefined
     }
-    verifiedExportPin = ''
-    pendingExportShare = false
     if (scrollabilityTimer) {
       clearTimeout(scrollabilityTimer)
       scrollabilityTimer = undefined
@@ -178,6 +170,12 @@ Page({
   onTapRecycle() {
     wx.navigateTo({
       url: '/pages/recycle/index',
+    })
+  },
+
+  onTapCategoryManage() {
+    wx.navigateTo({
+      url: '/pages/category-manage/index',
     })
   },
 
@@ -226,6 +224,18 @@ Page({
       pinDigits: '',
       pendingAction: '',
     })
+  },
+
+  syncEntryMode() {
+    const isSinglePage = isTimelineSinglePageMode()
+    if (isSinglePage === this.data.singlePageMode) {
+      return isSinglePage
+    }
+
+    this.setData({
+      singlePageMode: isSinglePage,
+    })
+    return isSinglePage
   },
 
   noop() {},
@@ -325,12 +335,7 @@ Page({
     }
 
     if (action === 'export') {
-      if (!this.shouldShowExportRecommendGate()) {
-        await this.exportTxt()
-        return
-      }
-
-      this.openExportShareGate(verifiedPin)
+      await this.exportTxt()
       return
     }
 
@@ -400,8 +405,6 @@ Page({
   },
 
   async exportTxt() {
-    this.setData({ exportStage: 'sharingBackup' })
-
     const result = await repository.exportTxt()
     const shareResult = await this.tryShareBackupFile(result.filePath)
 
@@ -429,101 +432,6 @@ Page({
     }
 
     this.loadStatus()
-    this.resetExportGate()
-  },
-
-  openExportShareGate(verifiedPin: string) {
-    verifiedExportPin = verifiedPin
-    this.setupShareMenu()
-    this.bumpExportRecommendGateCount()
-    this.setData({
-      exportStage: 'shareGate',
-      exportShareReady: false,
-    })
-  },
-
-  onCloseExportShareGate() {
-    if (this.data.exportStage === 'sharingBackup') {
-      return
-    }
-
-    this.resetExportGate()
-  },
-
-  markExportShareReady() {
-    this.setData({ exportShareReady: true })
-  },
-
-  async onContinueExportAfterShare() {
-    if (!this.data.exportShareReady) {
-      wx.showToast({
-        title: '请先推荐密麻麻',
-        icon: 'none',
-      })
-      return
-    }
-
-    if (!verifiedExportPin) {
-      wx.showToast({
-        title: '暗号状态失效，请重试导出',
-        icon: 'none',
-      })
-      this.resetExportGate()
-      return
-    }
-
-    const recheck = await verifyPin(verifiedExportPin)
-    if (recheck.code !== 'OK') {
-      wx.showToast({
-        title: '暗号状态失效，请重试导出',
-        icon: 'none',
-      })
-      this.resetExportGate()
-      return
-    }
-
-    await this.exportTxt()
-  },
-
-  onTapShareFriendForExport() {
-    pendingExportShare = true
-  },
-
-  shouldShowExportRecommendGate() {
-    if (this.data.recordCount <= EXPORT_RECOMMEND_GATE_RECORD_THRESHOLD) {
-      return false
-    }
-
-    return this.getExportRecommendGateCount() < EXPORT_RECOMMEND_GATE_MAX
-  },
-
-  getExportRecommendGateCount() {
-    try {
-      const value = wx.getStorageSync(EXPORT_RECOMMEND_GATE_COUNT_KEY)
-      const count = typeof value === 'number' ? value : Number(value || 0)
-      if (!Number.isFinite(count) || count < 0) {
-        return 0
-      }
-      return Math.floor(count)
-    } catch (_error) {
-      return 0
-    }
-  },
-
-  bumpExportRecommendGateCount() {
-    try {
-      const nextCount = Math.min(this.getExportRecommendGateCount() + 1, EXPORT_RECOMMEND_GATE_MAX)
-      wx.setStorageSync(EXPORT_RECOMMEND_GATE_COUNT_KEY, nextCount)
-    } catch (_error) {}
-  },
-
-  resetExportGate() {
-    verifiedExportPin = ''
-    pendingExportShare = false
-    this.setData({
-      exportStage: 'idle',
-      exportShareReady: false,
-    })
   },
 
   tryShareBackupFile(filePath: string) {

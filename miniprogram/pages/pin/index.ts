@@ -1,4 +1,5 @@
 import { hardResetVault, hasPin, lockCountdownSeconds, setPin, validatePinFormat, verifyPin } from '../../services/security'
+import { isTimelineSinglePageMode } from '../../utils/timeline-mode'
 
 const TAB_PAGE_ROUTES = ['/pages/vault/index', '/pages/mine/index']
 const PRIVACY_AGREED_STORAGE_KEY = 'mm_privacy_agreed_v1'
@@ -61,6 +62,7 @@ Page({
     showPrivacyPopup: false,
     privacyContractName: '隐私协议',
     privacyNeedOfficialAuth: false,
+    singlePageMode: false,
     dialog: createDialogState(),
   },
 
@@ -69,6 +71,27 @@ Page({
     this.setData({
       redirectPath: normalizeRedirect(options.redirect),
     })
+
+    if (this.syncEntryMode()) {
+      return
+    }
+
+    const privacyReady = await this.ensurePrivacyReady()
+    if (!privacyReady) {
+      return
+    }
+
+    await this.bootstrapPinPage()
+  },
+
+  async onShow() {
+    if (this.syncEntryMode()) {
+      return
+    }
+
+    if (this.data.pinBootstrapped) {
+      return
+    }
 
     const privacyReady = await this.ensurePrivacyReady()
     if (!privacyReady) {
@@ -87,6 +110,14 @@ Page({
   },
 
   onTapKey(event: WechatMiniprogram.BaseEvent) {
+    if (this.data.singlePageMode) {
+      wx.showToast({
+        title: '请点底部“前往小程序”后再设置暗号',
+        icon: 'none',
+      })
+      return
+    }
+
     const key = event.currentTarget.dataset.key as string
     if (!key) {
       return
@@ -147,6 +178,31 @@ Page({
       title: SHARE_TITLE,
       imageUrl: SHARE_IMAGE,
     }
+  },
+
+  syncEntryMode() {
+    const isSinglePage = isTimelineSinglePageMode()
+
+    if (!isSinglePage) {
+      if (this.data.singlePageMode) {
+        this.setData({ singlePageMode: false })
+      }
+      return false
+    }
+
+    this.setData({
+      singlePageMode: true,
+      digits: '',
+      creating: false,
+      setupStep: 1,
+      firstPin: '',
+      showPrivacyPopup: false,
+      title: '请前往小程序继续',
+      tips: '朋友圈预览页不支持设暗号，请点底部“前往小程序”。',
+      cooldownSeconds: 0,
+    })
+    this.stopLockTimer()
+    return true
   },
 
   async ensurePrivacyReady() {

@@ -1,8 +1,10 @@
 import type {
   BackupReminder,
   ExportPolicyDecision,
+  SystemVaultCategory,
   TxtImportResult,
   TxtExportResult,
+  VaultCategoryDefinition,
   VaultCategory,
   VaultCategorySource,
   VaultItem,
@@ -11,7 +13,7 @@ import type {
   VaultStats,
   VaultStatus,
 } from '../types/vault'
-import { CATEGORY_LABELS, inferCategoryByTitle, isCategory, normalizeCategory } from './category-engine'
+import { CATEGORY_LABELS, inferCategoryByTitle, isCategory } from './category-engine'
 
 const fs = wx.getFileSystemManager()
 const USER_DATA_PATH = (wx.env && wx.env.USER_DATA_PATH) || '/user_data'
@@ -26,9 +28,24 @@ const COOLDOWN_MS = 30 * 1000
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const SESSION_BACKGROUND_TIMEOUT_MS = 90 * 1000
 const RECYCLE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+const MAX_CUSTOM_CATEGORY_COUNT = 10
+const SYSTEM_CATEGORY_ORDER: SystemVaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
+const SYSTEM_CATEGORY_ALIAS: Record<string, SystemVaultCategory> = {
+  social: 'social',
+  '社交': 'social',
+  email: 'email',
+  '邮箱': 'email',
+  finance: 'finance',
+  '财务': 'finance',
+  website: 'website',
+  '网站': 'website',
+  others: 'others',
+  '其他': 'others',
+}
 
 interface VaultContainer {
   items: VaultItem[]
+  categories: VaultCategoryDefinition[]
 }
 
 interface SessionState {
@@ -76,12 +93,13 @@ class VaultRepository {
 
     const salt = createRandomHex(16)
     const key = deriveKey(passcode, salt)
+    const now = Date.now()
     const emptyVault: VaultContainer = {
       items: [],
+      categories: createSystemCategoryDefinitions(now),
     }
 
     const cipher = encryptText(JSON.stringify(emptyVault), key)
-    const now = Date.now()
     const meta: VaultMeta = {
       version: '3.0-local',
       salt,
@@ -261,7 +279,8 @@ class VaultRepository {
     }
 
     return items.filter((item) => {
-      const categoryMatched = category === 'all' || item.category === category
+      const itemCategoryId = resolveItemCategoryId(item)
+      const categoryMatched = category === 'all' || itemCategoryId === category
       if (!categoryMatched) {
         return false
       }
@@ -285,13 +304,16 @@ class VaultRepository {
     const existing = vault.items.find((item) => item.id === input.id && !item.deletedAt)
     const nextTitle = input.title.trim()
     const normalizedNote = typeof input.note === 'string' ? input.note : ''
-    const categoryState = resolveCategoryState(nextTitle, input.category, input.categorySource, existing)
+    const categoryMap = new Map(vault.categories.map((category) => [category.id, category]))
+    const targetCategoryRaw = typeof input.categoryId === 'string' && input.categoryId.trim() ? input.categoryId : input.category
+    const categoryState = resolveCategoryState(nextTitle, targetCategoryRaw, input.categorySource, existing, categoryMap)
+    const nextCategories = ensureCategoryExists(vault.categories, categoryState.categoryId, now)
 
     if (existing) {
       const nextSortOrder =
-        existing.category === categoryState.category
+        resolveItemCategoryId(existing) === categoryState.categoryId
           ? existing.sortOrder
-          : computeAppendSortOrder(vault.items, categoryState.category)
+          : computeAppendSortOrder(vault.items, categoryState.categoryId)
 
       const nextItems = vault.items.map((item) => {
         if (item.id !== existing.id) {
@@ -304,7 +326,8 @@ class VaultRepository {
           account: input.account.trim(),
           password: input.password,
           note: normalizedNote.trim(),
-          category: categoryState.category,
+          categoryId: categoryState.categoryId,
+          category: categoryState.categoryId,
           categorySource: categoryState.source,
           sortOrder: nextSortOrder,
           updatedAt: now,
@@ -312,7 +335,7 @@ class VaultRepository {
         }
       })
 
-      this.saveVault({ items: nextItems }, now)
+      this.saveVault({ items: nextItems, categories: nextCategories }, now)
       return existing.id
     }
 
@@ -322,16 +345,17 @@ class VaultRepository {
       account: input.account.trim(),
       password: input.password,
       note: normalizedNote.trim(),
-      category: categoryState.category,
+      categoryId: categoryState.categoryId,
+      category: categoryState.categoryId,
       categorySource: categoryState.source,
-      sortOrder: computeAppendSortOrder(vault.items, categoryState.category),
+      sortOrder: computeAppendSortOrder(vault.items, categoryState.categoryId),
       deletedAt: undefined,
       createdAt: now,
       updatedAt: now,
       lastUsedAt: now,
     }
 
-    this.saveVault({ items: [nextItem, ...vault.items] }, now)
+    this.saveVault({ items: [nextItem, ...vault.items], categories: nextCategories }, now)
     return nextItem.id
   }
 
@@ -356,7 +380,7 @@ class VaultRepository {
       return
     }
 
-    this.saveVault({ items: nextItems }, now)
+    this.saveVault({ items: nextItems, categories: vault.categories }, now)
   }
 
   async listRecycleItems() {
@@ -392,7 +416,7 @@ class VaultRepository {
       return false
     }
 
-    this.saveVault({ items: nextItems }, now)
+    this.saveVault({ items: nextItems, categories: vault.categories }, now)
     return true
   }
 
@@ -403,7 +427,7 @@ class VaultRepository {
       return false
     }
 
-    this.saveVault({ items: nextItems }, Date.now())
+    this.saveVault({ items: nextItems, categories: vault.categories }, Date.now())
     return true
   }
 
@@ -415,7 +439,7 @@ class VaultRepository {
     }
 
     const removedCount = vault.items.length - nextItems.length
-    this.saveVault({ items: nextItems }, Date.now())
+    this.saveVault({ items: nextItems, categories: vault.categories }, Date.now())
     return removedCount
   }
 
@@ -433,7 +457,7 @@ class VaultRepository {
       }
     })
 
-    this.saveVault({ items: nextItems }, now)
+    this.saveVault({ items: nextItems, categories: vault.categories }, now)
   }
 
   async reorderCategory(category: VaultCategory, orderedIds: string[]) {
@@ -449,7 +473,7 @@ class VaultRepository {
 
     let changed = false
     const nextItems = vault.items.map((item) => {
-      if (item.deletedAt || item.category !== category) {
+      if (item.deletedAt || resolveItemCategoryId(item) !== category) {
         return item
       }
 
@@ -469,7 +493,142 @@ class VaultRepository {
       return
     }
 
-    this.saveVault({ items: nextItems }, Date.now())
+    this.saveVault({ items: nextItems, categories: vault.categories }, Date.now())
+  }
+
+  async listCategories(): Promise<VaultCategoryDefinition[]> {
+    const vault = this.readVaultWithSession()
+    return [...vault.categories].sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder
+      }
+      return a.createdAt - b.createdAt
+    })
+  }
+
+  async createCustomCategory(label: string): Promise<VaultCategoryDefinition> {
+    const normalizedLabel = normalizeCategoryLabel(label)
+    if (!normalizedLabel) {
+      throw new Error('CATEGORY_LABEL_EMPTY')
+    }
+
+    const vault = this.readVaultWithSession()
+    const existed = vault.categories.find((category) => normalizeCategoryLabel(category.label) === normalizedLabel)
+    if (existed) {
+      return existed
+    }
+
+    const customCount = vault.categories.filter((category) => category.source === 'custom').length
+    if (customCount >= MAX_CUSTOM_CATEGORY_COUNT) {
+      throw new Error('CATEGORY_CUSTOM_LIMIT')
+    }
+
+    const now = Date.now()
+    const nextSortOrder = vault.categories.length ? Math.max(...vault.categories.map((item) => item.sortOrder)) + 1 : 0
+    const id = createCustomCategoryKey()
+    const customCategory: VaultCategoryDefinition = {
+      id,
+      key: id,
+      label: normalizedLabel,
+      source: 'custom',
+      sortOrder: nextSortOrder,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    const nextCategories = [...vault.categories, customCategory]
+    this.saveVault({ items: vault.items, categories: nextCategories }, now)
+    return customCategory
+  }
+
+  async reorderCategories(orderedKeys: VaultCategory[]) {
+    if (!orderedKeys.length) {
+      return
+    }
+
+    const vault = this.readVaultWithSession()
+    const dedupOrderedKeys: string[] = []
+    const seen = new Set<string>()
+    orderedKeys.forEach((key) => {
+      const normalizedKey = normalizeCategoryKey(key)
+      if (!normalizedKey || seen.has(normalizedKey)) {
+        return
+      }
+      seen.add(normalizedKey)
+      dedupOrderedKeys.push(normalizedKey)
+    })
+
+    const currentKeys = vault.categories
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((category) => category.id)
+    currentKeys.forEach((key) => {
+      if (seen.has(key)) {
+        return
+      }
+      dedupOrderedKeys.push(key)
+      seen.add(key)
+    })
+
+    const rankMap = new Map<string, number>()
+    dedupOrderedKeys.forEach((key, index) => {
+      rankMap.set(key, index)
+    })
+
+    let changed = false
+    const nextCategories = vault.categories.map((category) => {
+      const nextRank = rankMap.get(category.id)
+      if (typeof nextRank !== 'number' || nextRank === category.sortOrder) {
+        return category
+      }
+
+      changed = true
+      return {
+        ...category,
+        sortOrder: nextRank,
+        updatedAt: Date.now(),
+      }
+    })
+
+    if (!changed) {
+      return
+    }
+
+    this.saveVault({ items: vault.items, categories: nextCategories }, Date.now())
+  }
+
+  async deleteCustomCategory(categoryKey: VaultCategory) {
+    const vault = this.readVaultWithSession()
+    const target = vault.categories.find((category) => category.id === categoryKey)
+    if (!target || target.source !== 'custom') {
+      return false
+    }
+
+    const now = Date.now()
+    const fallbackCategory = ensureFallbackCategory(vault.categories)
+    const nextItems = vault.items.map((item) => {
+      if (resolveItemCategoryId(item) !== categoryKey) {
+        return item
+      }
+      return {
+        ...item,
+        categoryId: fallbackCategory,
+        category: fallbackCategory,
+        categorySource: 'manual' as VaultCategorySource,
+        updatedAt: now,
+      }
+    })
+
+    const nextCategories = vault.categories
+      .filter((category) => category.id !== categoryKey)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((category, index) => ({
+        ...category,
+        sortOrder: index,
+      }))
+
+    this.saveVault({ items: nextItems, categories: nextCategories }, now)
+    return true
   }
 
   async getStats(): Promise<VaultStats> {
@@ -537,8 +696,9 @@ class VaultRepository {
   }
 
   async exportTxt(): Promise<TxtExportResult> {
-    const items = await this.listItems()
-    const txt = toEncryptedBackupText(items)
+    const vault = this.readVaultWithSession()
+    const items = vault.items.filter((item) => !item.deletedAt).sort(compareActiveItems)
+    const txt = toEncryptedBackupText(items, vault.categories)
     const decision = this.decideExportPolicy()
 
     const filePath = `${ROOT_DIR}/${formatExportFilename(new Date())}.mmbak`
@@ -570,9 +730,74 @@ class VaultRepository {
       throw new Error('INVALID_IMPORT_TXT')
     }
 
-    const parsedItems = parseMimamaImport(raw)
+    const parsed = parseMimamaImport(raw)
+    const preferImportCategoryOrder = isEncryptedImportText(raw)
+    const parsedItems = parsed.items
     const vault = this.readVaultWithSession()
     const now = Date.now()
+    const localCategoryByKey = new Map(vault.categories.map((category) => [category.id, category]))
+    const localCategoryByLabel = new Map(
+      vault.categories.map((category) => [normalizeCategoryLabel(category.label), category]),
+    )
+
+    const importLabelByKey = new Map<string, string>()
+    parsed.categories.forEach((category) => {
+      const normalizedLabel = normalizeCategoryLabel(category.label || category.id)
+      if (!normalizedLabel) {
+        return
+      }
+      importLabelByKey.set(category.id, normalizedLabel)
+    })
+
+    const existingKeyMap = new Map<string, string>()
+    const newlyCreated: VaultCategoryDefinition[] = []
+    parsed.categories.forEach((category) => {
+      const normalizedLabel = normalizeCategoryLabel(category.label || category.id)
+      if (!normalizedLabel) {
+        return
+      }
+
+      const byId = localCategoryByKey.get(category.id)
+      if (byId) {
+        existingKeyMap.set(category.id, byId.id)
+        return
+      }
+
+      const existed = localCategoryByLabel.get(normalizedLabel)
+      if (existed) {
+        existingKeyMap.set(category.id, existed.id)
+        return
+      }
+
+      const preferredId = normalizeCategoryKey(category.id || '')
+      const id = preferredId && !localCategoryByKey.has(preferredId) ? preferredId : createCustomCategoryKey()
+      const created: VaultCategoryDefinition = {
+        id,
+        key: id,
+        label: normalizedLabel,
+        source: isCategory(category.id) ? 'system' : 'custom',
+        sortOrder: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
+      newlyCreated.push(created)
+      localCategoryByLabel.set(normalizedLabel, created)
+      localCategoryByKey.set(created.id, created)
+      existingKeyMap.set(category.id, created.id)
+    })
+
+    const nextCategories = mergeCategoryOrder(
+      vault.categories,
+      newlyCreated,
+      parsed.categoryOrder,
+      existingKeyMap,
+      now,
+      preferImportCategoryOrder,
+    )
+    nextCategories.forEach((category) => {
+      localCategoryByKey.set(category.id, category)
+    })
+
     const seen = new Set(
       vault.items
         .filter((item) => !item.deletedAt)
@@ -601,7 +826,16 @@ class VaultRepository {
       }
 
       seen.add(key)
-      const categoryState = resolveCategoryState(title, item.category, 'manual')
+      const importCategoryLabel = importLabelByKey.get(item.categoryId)
+      const mappedCategoryKey = existingKeyMap.get(item.categoryId)
+      const categoryState = resolveCategoryState(
+        title,
+        mappedCategoryKey || item.categoryId,
+        'manual',
+        undefined,
+        localCategoryByKey,
+        importCategoryLabel,
+      )
       const timestamp = now + index
 
       importedItems.push({
@@ -610,7 +844,8 @@ class VaultRepository {
         account,
         password,
         note,
-        category: categoryState.category,
+        categoryId: categoryState.categoryId,
+        category: categoryState.categoryId,
         categorySource: categoryState.source,
         deletedAt: undefined,
         createdAt: timestamp,
@@ -623,6 +858,15 @@ class VaultRepository {
       this.saveVault(
         {
           items: [...importedItems, ...vault.items],
+          categories: nextCategories,
+        },
+        now,
+      )
+    } else if (newlyCreated.length > 0) {
+      this.saveVault(
+        {
+          items: vault.items,
+          categories: nextCategories,
         },
         now,
       )
@@ -736,14 +980,19 @@ class VaultRepository {
     }
 
     const key = sessionState.key
-    const cipher = encryptText(JSON.stringify(vault), key)
+    const normalizedCategories = ensureCategoriesForItems(normalizeCategorySort(vault.categories), vault.items, modifiedAt)
+    const normalizedVault: VaultContainer = {
+      items: vault.items,
+      categories: normalizedCategories,
+    }
+    const cipher = encryptText(JSON.stringify(normalizedVault), key)
     const currentMeta = readMeta()
 
     const nextMeta: VaultMeta = {
       ...currentMeta,
-      recordCount: countActiveItems(vault.items),
+      recordCount: countActiveItems(normalizedVault.items),
       lastModifiedAt: modifiedAt,
-      checksum: hashText(`${cipher}:${currentMeta.salt}:${countActiveItems(vault.items)}`),
+      checksum: hashText(`${cipher}:${currentMeta.salt}:${countActiveItems(normalizedVault.items)}`),
     }
 
     fs.writeFileSync(VAULT_DATA_PATH, cipher, 'utf8')
@@ -817,7 +1066,7 @@ class VaultRepository {
 
     const meta = this.readMetaSafe()
     const modifiedAt = meta && typeof meta.lastModifiedAt === 'number' ? meta.lastModifiedAt : now
-    const nextVault = { items: nextItems }
+    const nextVault = { items: nextItems, categories: vault.categories }
     this.saveVault(nextVault, modifiedAt)
     return { vault: nextVault, changed: true }
   }
@@ -924,17 +1173,37 @@ const readVaultCipherText = () => {
 const readVaultWithKey = (key: string): VaultContainer => {
   const cipher = readVaultCipherText()
   const plain = decryptText(cipher, key)
-  const parsed = JSON.parse(plain) as VaultContainer
+  const parsed = JSON.parse(plain) as Partial<VaultContainer> & { categories?: unknown[] }
 
   if (!Array.isArray(parsed.items)) {
     throw new Error('Vault data is corrupted.')
   }
 
   const now = Date.now()
+  const categories = coerceCategoryDefinitions(parsed.categories, now)
+  const categoryKeySet = new Set(categories.map((category) => category.id))
+
+  const items = parsed.items
+    .map((item, index) => coerceVaultItem(item, now + index))
+    .filter((item): item is VaultItem => item !== null)
+    .map((item) => {
+      if (categoryKeySet.has(resolveItemCategoryId(item))) {
+        return item
+      }
+
+      const currentCategoryId = resolveItemCategoryId(item)
+      const nextCategory = isCategory(currentCategoryId) ? currentCategoryId : 'others'
+      return {
+        ...item,
+        categoryId: nextCategory,
+        category: nextCategory,
+      }
+    })
+
+  const withInferredCategories = ensureCategoriesForItems(categories, items, now)
   return {
-    items: parsed.items
-      .map((item, index) => coerceVaultItem(item, now + index))
-      .filter((item): item is VaultItem => item !== null),
+    items,
+    categories: withInferredCategories,
   }
 }
 
@@ -951,11 +1220,14 @@ const coerceVaultItem = (value: unknown, fallbackTimestamp: number): VaultItem |
     return null
   }
 
-  const normalized = normalizeCategory(
-    (raw as { category?: string }).category,
-    (raw as { categorySource?: string }).categorySource,
-    raw.title,
-  )
+  const rawCategoryId = isText((raw as { categoryId?: unknown }).categoryId)
+    ? normalizeCategoryKey(((raw as { categoryId: string }).categoryId || '').trim())
+    : ''
+  const rawCategoryLegacy = isText((raw as { category?: unknown }).category)
+    ? normalizeCategoryKey(((raw as { category: string }).category || '').trim())
+    : ''
+  const normalizedCategory = rawCategoryId || rawCategoryLegacy || inferCategoryByTitle(raw.title).category
+  const source = normalizeCategorySource((raw as { categorySource?: unknown }).categorySource, normalizedCategory, raw.title)
 
   const updatedAt = isNumber(raw.updatedAt) ? raw.updatedAt : fallbackTimestamp
   const createdAt = isNumber(raw.createdAt) ? raw.createdAt : updatedAt
@@ -971,8 +1243,9 @@ const coerceVaultItem = (value: unknown, fallbackTimestamp: number): VaultItem |
     account: raw.account,
     password: raw.password,
     note: isText(raw.note) ? raw.note : '',
-    category: normalized.category,
-    categorySource: normalized.source,
+    categoryId: normalizedCategory,
+    category: normalizedCategory,
+    categorySource: source,
     sortOrder,
     deletedAt,
     createdAt,
@@ -982,7 +1255,7 @@ const coerceVaultItem = (value: unknown, fallbackTimestamp: number): VaultItem |
 }
 
 const compareActiveItems = (a: VaultItem, b: VaultItem) => {
-  if (a.category === b.category) {
+  if (resolveItemCategoryId(a) === resolveItemCategoryId(b)) {
     const aHasOrder = isNumber(a.sortOrder)
     const bHasOrder = isNumber(b.sortOrder)
 
@@ -1000,7 +1273,7 @@ const compareActiveItems = (a: VaultItem, b: VaultItem) => {
 
 const computeAppendSortOrder = (items: VaultItem[], category: VaultCategory): number | undefined => {
   const orders = items
-    .filter((item) => !item.deletedAt && item.category === category && isNumber(item.sortOrder))
+    .filter((item) => !item.deletedAt && resolveItemCategoryId(item) === category && isNumber(item.sortOrder))
     .map((item) => item.sortOrder as number)
 
   if (!orders.length) {
@@ -1109,7 +1382,6 @@ const bytesToUtf8 = (bytes: Uint8Array) => {
   return decodeURIComponent(encoded)
 }
 
-const CATEGORY_EXPORT_ORDER: VaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const IMPORT_HEADER = '密麻麻离线备份'
 const ENCRYPTED_BACKUP_HEADER = 'MIMAMA-BACKUP-1'
 const ENCRYPTED_BACKUP_END = 'MIMAMA-END'
@@ -1134,12 +1406,35 @@ interface EncryptedBackupPayload {
   algo: string
   createdAt: number
   itemCount: number
+  categories?: Array<{
+    id?: string
+    key: string
+    label: string
+    source?: 'system' | 'custom'
+  }>
+  categoryOrder?: string[]
   items: TxtImportItem[]
 }
 
-const toEncryptedBackupText = (items: VaultItem[]) => {
+const toEncryptedBackupText = (items: VaultItem[], categories: VaultCategoryDefinition[]) => {
+  const orderMap = new Map<string, number>()
+  categories
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .forEach((category, index) => {
+      orderMap.set(category.id, index)
+    })
+
   const ordered = [...items].sort((a, b) => {
-    const categoryDiff = CATEGORY_EXPORT_ORDER.indexOf(a.category) - CATEGORY_EXPORT_ORDER.indexOf(b.category)
+    const rankA =
+      typeof orderMap.get(resolveItemCategoryId(a)) === 'number'
+        ? (orderMap.get(resolveItemCategoryId(a)) as number)
+        : Number.MAX_SAFE_INTEGER
+    const rankB =
+      typeof orderMap.get(resolveItemCategoryId(b)) === 'number'
+        ? (orderMap.get(resolveItemCategoryId(b)) as number)
+        : Number.MAX_SAFE_INTEGER
+    const categoryDiff = rankA - rankB
     if (categoryDiff !== 0) {
       return categoryDiff
     }
@@ -1150,12 +1445,23 @@ const toEncryptedBackupText = (items: VaultItem[]) => {
     algo: ENCRYPTED_BACKUP_ALGO,
     createdAt: Date.now(),
     itemCount: ordered.length,
+    categories: categories
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((category) => ({
+        id: category.id,
+        key: category.id,
+        label: safeText(category.label),
+        source: category.source,
+      })),
+    categoryOrder: categories.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((category) => category.id),
     items: ordered.map((item) => ({
       title: safeText(item.title),
       account: safeText(item.account),
       password: item.password,
       note: safeMultilineText(item.note),
-      category: item.category,
+      category: resolveItemCategoryId(item),
+      categoryId: resolveItemCategoryId(item),
     })),
   }
 
@@ -1180,27 +1486,380 @@ const resolveCategoryState = (
   category?: string,
   categorySource?: string,
   existing?: VaultItem,
-): { category: VaultCategory; source: VaultCategorySource } => {
-  if (isCategory(category)) {
-    const normalized = normalizeCategory(category, categorySource, title)
+  categoryMap?: Map<string, VaultCategoryDefinition>,
+  fallbackLabel?: string,
+): { categoryId: VaultCategory; source: VaultCategorySource } => {
+  if (category && category.trim()) {
+    const normalizedCategory = normalizeCategoryKey(category.trim())
+    if (isCategory(normalizedCategory)) {
+      return {
+        categoryId: normalizedCategory,
+        source: normalizeCategorySource(categorySource, normalizedCategory, title),
+      }
+    }
+
+    if (categoryMap && categoryMap.has(normalizedCategory)) {
+      return {
+        categoryId: normalizedCategory,
+        source: normalizeCategorySource(categorySource, normalizedCategory, title),
+      }
+    }
+
+    if (fallbackLabel) {
+      const normalizedLabel = normalizeCategoryLabel(fallbackLabel)
+      if (normalizedLabel && categoryMap) {
+        for (const definition of categoryMap.values()) {
+          if (normalizeCategoryLabel(definition.label) === normalizedLabel) {
+            return {
+              categoryId: definition.id,
+              source: 'manual',
+            }
+          }
+        }
+      }
+      if (normalizedLabel && !categoryMap) {
+        return {
+          categoryId: normalizedCategory,
+          source: 'manual',
+        }
+      }
+    }
+
     return {
-      category: normalized.category,
-      source: normalized.source,
+      categoryId: normalizedCategory,
+      source: normalizeCategorySource(categorySource, normalizedCategory, title),
     }
   }
 
   if (existing && existing.categorySource === 'manual') {
     return {
-      category: existing.category,
+      categoryId: resolveItemCategoryId(existing),
       source: 'manual',
     }
   }
 
   const inferred = inferCategoryByTitle(title)
   return {
-    category: inferred.category,
+    categoryId: inferred.category,
     source: inferred.source,
   }
+}
+
+const createSystemCategoryDefinitions = (now: number): VaultCategoryDefinition[] => {
+  return SYSTEM_CATEGORY_ORDER.map((key, index) => ({
+    id: key,
+    key,
+    label: CATEGORY_LABELS[key],
+    source: 'system',
+    sortOrder: index,
+    createdAt: now + index,
+    updatedAt: now + index,
+  }))
+}
+
+const ensureCategoriesForItems = (
+  baseCategories: VaultCategoryDefinition[],
+  items: VaultItem[],
+  now: number,
+): VaultCategoryDefinition[] => {
+  const next = [...baseCategories]
+  const exists = new Set(next.map((category) => category.id))
+  let nextOrder = next.length ? Math.max(...next.map((category) => category.sortOrder)) + 1 : 0
+
+  items.forEach((item, index) => {
+    const categoryId = resolveItemCategoryId(item)
+    if (exists.has(categoryId)) {
+      return
+    }
+    exists.add(categoryId)
+    next.push({
+      id: categoryId,
+      key: categoryId,
+      label: isCategory(categoryId) ? CATEGORY_LABELS[categoryId] : categoryId,
+      source: isCategory(categoryId) ? 'system' : 'custom',
+      sortOrder: nextOrder,
+      createdAt: now + index,
+      updatedAt: now + index,
+    })
+    nextOrder += 1
+  })
+
+  return normalizeCategorySort(next)
+}
+
+const coerceCategoryDefinitions = (rawCategories: unknown[] | undefined, now: number): VaultCategoryDefinition[] => {
+  const next: VaultCategoryDefinition[] = []
+  const systemDefault = createSystemCategoryDefinitions(now)
+  const defaultMap = new Map(systemDefault.map((item) => [item.id, item]))
+  const usedKeys = new Set<string>()
+
+  if (Array.isArray(rawCategories)) {
+    rawCategories.forEach((item, index) => {
+      if (!item || typeof item !== 'object') {
+        return
+      }
+      const raw = item as Partial<VaultCategoryDefinition>
+      const rawId = typeof raw.id === 'string' && raw.id.trim() ? raw.id : raw.key
+      if (typeof rawId !== 'string' || !rawId.trim()) {
+        return
+      }
+      const key = normalizeCategoryKey(rawId.trim())
+      if (usedKeys.has(key)) {
+        return
+      }
+      usedKeys.add(key)
+      const fallback = defaultMap.get(key)
+      const label =
+        typeof raw.label === 'string' && normalizeCategoryLabel(raw.label)
+          ? normalizeCategoryLabel(raw.label)
+          : fallback
+            ? fallback.label
+            : key
+      next.push({
+        id: key,
+        key,
+        label,
+        source: raw.source === 'custom' ? 'custom' : isCategory(key) ? 'system' : 'custom',
+        sortOrder: typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) ? raw.sortOrder : index,
+        createdAt: typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now + index,
+        updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now + index,
+      })
+    })
+  }
+
+  systemDefault.forEach((systemCategory) => {
+    if (usedKeys.has(systemCategory.id)) {
+      return
+    }
+    next.push(systemCategory)
+    usedKeys.add(systemCategory.id)
+  })
+
+  return normalizeCategorySort(next)
+}
+
+const normalizeCategorySort = (categories: VaultCategoryDefinition[]): VaultCategoryDefinition[] => {
+  return categories
+    .slice()
+    .sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder
+      }
+      return a.createdAt - b.createdAt
+    })
+    .map((category, index) => ({
+      ...category,
+      key: category.id,
+      sortOrder: index,
+    }))
+}
+
+const ensureCategoryExists = (categories: VaultCategoryDefinition[], key: VaultCategory, now: number): VaultCategoryDefinition[] => {
+  if (!key || categories.some((category) => category.id === key)) {
+    return categories
+  }
+
+  const next = [...categories]
+  next.push({
+    id: key,
+    key,
+    label: isCategory(key) ? CATEGORY_LABELS[key] : key,
+    source: isCategory(key) ? 'system' : 'custom',
+    sortOrder: categories.length,
+    createdAt: now,
+    updatedAt: now,
+  })
+  return next
+}
+
+const ensureFallbackCategory = (categories: VaultCategoryDefinition[]): VaultCategory => {
+  if (categories.some((category) => category.id === 'others')) {
+    return 'others'
+  }
+
+  if (categories.length > 0) {
+    return categories[0].id
+  }
+
+  return 'others'
+}
+
+const normalizeCategorySource = (source: unknown, category: string, title: string): VaultCategorySource => {
+  if (source === 'manual' || source === 'icon' || source === 'keyword' || source === 'default') {
+    return source
+  }
+
+  if (!category) {
+    return inferCategoryByTitle(title).source
+  }
+
+  return isCategory(category) ? 'manual' : 'manual'
+}
+
+const normalizeCategoryLabel = (value: string): string => {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+const normalizeCategoryKey = (value: string): VaultCategory => {
+  const normalized = (value || '').trim()
+  if (!normalized) {
+    return normalized
+  }
+
+  const directAlias = SYSTEM_CATEGORY_ALIAS[normalized]
+  if (directAlias) {
+    return directAlias
+  }
+
+  const lowerAlias = SYSTEM_CATEGORY_ALIAS[normalized.toLowerCase()]
+  if (lowerAlias) {
+    return lowerAlias
+  }
+
+  return normalized
+}
+
+const resolveItemCategoryId = (item: VaultItem): VaultCategory => {
+  const rawCategoryId = typeof item.categoryId === 'string' ? item.categoryId : ''
+  const rawCategory = typeof item.category === 'string' ? item.category : ''
+  const normalizedCategoryId = normalizeCategoryKey(rawCategoryId.trim())
+  if (normalizedCategoryId) {
+    return normalizedCategoryId
+  }
+
+  const normalizedCategory = normalizeCategoryKey(rawCategory.trim())
+  if (normalizedCategory) {
+    return normalizedCategory
+  }
+
+  const inferred = inferCategoryByTitle(item.title || '')
+  return inferred.category
+}
+
+const createCustomCategoryKey = (): string => {
+  return `custom_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`
+}
+
+const mergeCategoryOrder = (
+  localCategories: VaultCategoryDefinition[],
+  newlyCreated: VaultCategoryDefinition[],
+  importOrder: string[],
+  importKeyToLocalKey: Map<string, string>,
+  now: number,
+  preferImportOrder = false,
+): VaultCategoryDefinition[] => {
+  const localOrder = localCategories
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((category) => category.id)
+  const addedSet = new Set(newlyCreated.map((category) => category.id))
+  const nextOrder = [...localOrder]
+
+  let seenLocalAnchor = false
+  const pendingSegment: string[] = []
+  const pendingSet = new Set<string>()
+
+  const flushBeforeAnchor = (anchorKey: string) => {
+    if (!pendingSegment.length) {
+      return
+    }
+    const anchorIndex = nextOrder.indexOf(anchorKey)
+    if (anchorIndex < 0) {
+      return
+    }
+    nextOrder.splice(anchorIndex, 0, ...pendingSegment)
+    pendingSegment.length = 0
+    pendingSet.clear()
+  }
+
+  for (const importKey of importOrder) {
+    const mappedKey = importKeyToLocalKey.get(importKey)
+    if (!mappedKey) {
+      continue
+    }
+
+    const isLocalKey = localOrder.includes(mappedKey)
+    if (isLocalKey) {
+      if (seenLocalAnchor) {
+        flushBeforeAnchor(mappedKey)
+      }
+      seenLocalAnchor = true
+      continue
+    }
+
+    if (!addedSet.has(mappedKey) || pendingSet.has(mappedKey) || nextOrder.includes(mappedKey)) {
+      continue
+    }
+
+    pendingSegment.push(mappedKey)
+    pendingSet.add(mappedKey)
+  }
+
+  if (pendingSegment.length > 0) {
+    nextOrder.push(...pendingSegment)
+  }
+
+  newlyCreated.forEach((category) => {
+    if (!nextOrder.includes(category.id)) {
+      nextOrder.push(category.id)
+    }
+  })
+
+  const byKey = new Map([...localCategories, ...newlyCreated].map((category) => [category.id, category]))
+
+  if (preferImportOrder) {
+    const importMappedOrder: string[] = []
+    const seen = new Set<string>()
+    importOrder.forEach((importKey) => {
+      const mappedKey = importKeyToLocalKey.get(importKey)
+      if (!mappedKey || seen.has(mappedKey) || !byKey.has(mappedKey)) {
+        return
+      }
+      seen.add(mappedKey)
+      importMappedOrder.push(mappedKey)
+    })
+
+    const localTail = nextOrder.filter((key) => !seen.has(key) && byKey.has(key))
+    const mergedOrder = [...importMappedOrder, ...localTail]
+
+    return mergedOrder
+      .map((key, index) => {
+        const category = byKey.get(key)
+        if (!category) {
+          return null
+        }
+        return {
+          ...category,
+          sortOrder: index,
+          updatedAt: now,
+        }
+      })
+      .filter((item): item is VaultCategoryDefinition => item !== null)
+  }
+
+  return nextOrder
+    .map((key, index) => {
+      const category = byKey.get(key)
+      if (!category) {
+        return null
+      }
+      return {
+        ...category,
+        sortOrder: index,
+        updatedAt: now,
+      }
+    })
+    .filter((item): item is VaultCategoryDefinition => item !== null)
+}
+
+const isEncryptedImportText = (raw: string): boolean => {
+  const firstNonEmpty = raw
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+  return firstNonEmpty === ENCRYPTED_BACKUP_HEADER
 }
 
 const countActiveItems = (items: VaultItem[]) => {
@@ -1242,10 +1901,24 @@ interface TxtImportItem {
   account: string
   password: string
   note: string
+  categoryId: VaultCategory
   category: VaultCategory
 }
 
-const parseMimamaImport = (raw: string): TxtImportItem[] => {
+interface ParsedImportCategory {
+  id: string
+  key: string
+  label: string
+  source: 'system' | 'custom'
+}
+
+interface ParsedImportResult {
+  items: TxtImportItem[]
+  categories: ParsedImportCategory[]
+  categoryOrder: string[]
+}
+
+const parseMimamaImport = (raw: string): ParsedImportResult => {
   const text = raw.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   const firstNonEmpty = text
     .split('\n')
@@ -1259,7 +1932,7 @@ const parseMimamaImport = (raw: string): TxtImportItem[] => {
   return parseMimamaTxtImport(text)
 }
 
-const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
+const parseMimamaEncryptedImport = (text: string): ParsedImportResult => {
   const lines = text.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
   if (!lines.length || lines[0] !== ENCRYPTED_BACKUP_HEADER) {
     throw new Error('INVALID_IMPORT_TXT')
@@ -1351,7 +2024,11 @@ const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
         : buildImportFallbackTitle(account)
 
     const normalizedCategory = resolveImportCategory(
-      typeof rawItem.category === 'string' ? rawItem.category : '',
+      typeof rawItem.categoryId === 'string' && rawItem.categoryId.trim()
+        ? rawItem.categoryId
+        : typeof rawItem.category === 'string'
+          ? rawItem.category
+          : '',
       title,
     )
 
@@ -1360,6 +2037,7 @@ const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
       account,
       password,
       note: typeof rawItem.note === 'string' ? safeMultilineText(rawItem.note) : '',
+      categoryId: normalizedCategory,
       category: normalizedCategory,
     })
   })
@@ -1368,10 +2046,16 @@ const parseMimamaEncryptedImport = (text: string): TxtImportItem[] => {
     throw new Error('INVALID_IMPORT_TXT')
   }
 
-  return normalizedItems
+  const categories = collectImportCategories(payload, normalizedItems)
+  const categoryOrder = collectImportCategoryOrder(payload, categories)
+  return {
+    items: normalizedItems,
+    categories,
+    categoryOrder,
+  }
 }
 
-const parseMimamaTxtImport = (raw: string): TxtImportItem[] => {
+const parseMimamaTxtImport = (raw: string): ParsedImportResult => {
   const lines = raw.split('\n')
   const firstNonEmpty = lines.find((line) => line.trim().length > 0)
   if (!firstNonEmpty || firstNonEmpty.trim() !== IMPORT_HEADER) {
@@ -1399,6 +2083,7 @@ const parseMimamaTxtImport = (raw: string): TxtImportItem[] => {
         account,
         password,
         note,
+        categoryId: category,
         category,
       })
     }
@@ -1506,7 +2191,83 @@ const parseMimamaTxtImport = (raw: string): TxtImportItem[] => {
     throw new Error('INVALID_IMPORT_TXT')
   }
 
-  return items
+  const categories = collectImportCategories(undefined, items)
+  const categoryOrder = categories.map((category) => category.id)
+  return {
+    items,
+    categories,
+    categoryOrder,
+  }
+}
+
+const collectImportCategories = (
+  payload: EncryptedBackupPayload | undefined,
+  items: TxtImportItem[],
+): ParsedImportCategory[] => {
+  const result: ParsedImportCategory[] = []
+  const seen = new Set<string>()
+
+  const pushCategory = (id: string, label: string, source: 'system' | 'custom') => {
+    const normalizedId = normalizeCategoryKey((id || '').trim())
+    const normalizedLabel = normalizeCategoryLabel(label || id)
+    if (!normalizedId || !normalizedLabel || seen.has(normalizedId)) {
+      return
+    }
+    seen.add(normalizedId)
+    result.push({
+      id: normalizedId,
+      key: normalizedId,
+      label: normalizedLabel,
+      source,
+    })
+  }
+
+  const payloadCategories = payload && Array.isArray(payload.categories) ? payload.categories : []
+  payloadCategories.forEach((category) => {
+    if (!category || typeof category !== 'object') {
+      return
+    }
+    const id = typeof category.id === 'string' && category.id.trim() ? category.id : typeof category.key === 'string' ? category.key : ''
+    const label = typeof category.label === 'string' ? category.label : id
+    const source = category.source === 'custom' ? 'custom' : isCategory(id) ? 'system' : 'custom'
+    pushCategory(id, label, source)
+  })
+
+  items.forEach((item) => {
+    const categoryId = item.categoryId || item.category
+    const source = isCategory(categoryId) ? 'system' : 'custom'
+    const label = isCategory(categoryId) ? CATEGORY_LABELS[categoryId] : categoryId
+    pushCategory(categoryId, label, source)
+  })
+
+  return result
+}
+
+const collectImportCategoryOrder = (payload: EncryptedBackupPayload | undefined, categories: ParsedImportCategory[]): string[] => {
+  const order: string[] = []
+  const seen = new Set<string>()
+
+  const pushOrder = (key: string) => {
+    const normalized = normalizeCategoryKey((key || '').trim())
+    if (!normalized || seen.has(normalized)) {
+      return
+    }
+    seen.add(normalized)
+    order.push(normalized)
+  }
+
+  const payloadCategoryOrder = payload && Array.isArray(payload.categoryOrder) ? payload.categoryOrder : []
+  payloadCategoryOrder.forEach((key) => {
+    if (typeof key === 'string') {
+      pushOrder(key)
+    }
+  })
+
+  categories.forEach((category) => {
+    pushOrder(category.id)
+  })
+
+  return order
 }
 
 const detectImportCategory = (line: string): VaultCategory | '' => {
@@ -1579,8 +2340,9 @@ const chunkText = (text: string, size: number) => {
 }
 
 const resolveImportCategory = (category: string, title: string): VaultCategory => {
-  if (isCategory(category)) {
-    return category
+  const normalized = normalizeCategoryKey((category || '').trim())
+  if (normalized) {
+    return normalized
   }
 
   return inferCategoryByTitle(title).category

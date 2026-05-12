@@ -1,0 +1,112 @@
+<view class="page">
+  <block wx:if="{{singlePageMode}}">
+    <timeline-landing />
+  </block>
+
+  <block wx:else>
+  <view class="card">
+    <view
+      wx:for="{{categories}}"
+      wx:key="key"
+      class="row {{index % 2 === 0 ? 'tone-a' : 'tone-b'}} {{dragKey === item.key ? 'is-dragging' : ''}}"
+      style="{{dragKey === item.key ? dragStyle : ''}}"
+      data-key="{{item.key}}"
+      bindlongpress="onRowLongPress"
+      bindtouchmove="onRowTouchMove"
+      bindtouchend="onRowTouchEnd"
+      bindtouchcancel="onRowTouchEnd"
+    >
+      <view class="row-left">
+        <view class="row-label">{{item.label}}</view>
+        <view wx:if="{{item.source === 'system'}}" class="tag">系统</view>
+      </view>
+
+      <view class="row-right">
+        <view wx:if="{{item.source === 'custom'}}" class="delete" data-key="{{item.key}}" catchtap="onTapDeleteCategory" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">删除</view>
+        <view class="drag-handle">☰</view>
+      </view>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{canAddCustomCategory}}"
+    class="add-btn"
+    bindtap="onTapOpenAddSheet"
+    hover-class="light-press-active"
+    hover-start-time="0"
+    hover-stay-time="28"
+  >
+    + 新增分类
+  </view>
+
+  <view
+    wx:if="{{dragKey}}"
+    class="drag-gesture-layer"
+    catchtouchmove="onDragLayerTouchMove"
+    catchtouchend="onDragLayerTouchEnd"
+    catchtouchcancel="onDragLayerTouchEnd"
+  />
+
+  <view
+    wx:if="{{recommendStage === 'gate'}}"
+    class="recommend-gate-mask"
+    bindtap="onCloseCategoryRecommendGate"
+  >
+    <view class="recommend-gate-panel" catchtap="noop">
+      <view class="recommend-gate-title">{{recommendShareReady ? '继续添加分类' : '推荐后添加分类'}}</view>
+      <view wx:if="{{recommendShareReady}}" class="recommend-gate-desc">感谢你的推荐，现在可以继续添加分类</view>
+      <view wx:if="{{!recommendShareReady}}" class="recommend-gate-safe-note">仅推荐小程序，不会分享你的密码内容</view>
+      <image class="recommend-gate-image" src="/assets/mimama-share.png" mode="aspectFit" />
+
+      <view wx:if="{{!recommendShareReady}}" class="recommend-gate-actions">
+        <button
+          class="recommend-gate-btn recommend-gate-share"
+          open-type="share"
+          bindtap="onTapShareFriendForCategory"
+          hover-class="light-press-active"
+          hover-start-time="0"
+          hover-stay-time="28"
+        >
+          推荐给好友
+        </button>
+      </view>
+
+      <button
+        wx:if="{{recommendShareReady}}"
+        class="recommend-gate-continue"
+        bindtap="onContinueAddAfterShare"
+        hover-class="light-press-active"
+        hover-start-time="0"
+        hover-stay-time="28"
+      >
+        继续添加分类
+      </button>
+    </view>
+  </view>
+
+  <view wx:if="{{addSheetVisible}}" class="sheet-mask" bindtap="onTapCloseAddSheet">
+    <view class="sheet-panel" catchtap="noop">
+      <view class="sheet-title">新增分类</view>
+      <input
+        class="sheet-input"
+        value="{{newCategoryLabel}}"
+        placeholder="例如：游戏、购物、工作"
+        maxlength="16"
+        focus="{{sheetInputFocus}}"
+        adjust-position="{{false}}"
+        cursor-spacing="180"
+        confirm-type="done"
+        bindinput="onInputCategoryLabel"
+        bindfocus="onCategoryInputFocus"
+        bindblur="onCategoryInputBlur"
+      />
+      <view class="sheet-actions">
+        <view class="sheet-action cancel" bindtap="onTapCloseAddSheet" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">取消</view>
+        <view class="sheet-action confirm {{creating ? 'disabled' : ''}}" bindtap="onTapCreateCategory" hover-class="{{creating ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
+          {{creating ? '添加中...' : '添加'}}
+        </view>
+      </view>
+    </view>
+  </view>
+  </block>
+</view>

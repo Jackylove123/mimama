@@ -1,4 +1,9 @@
 <view class="page" style="padding-top: {{pagePaddingTopPx}}px;">
+  <block wx:if="{{singlePageMode}}">
+    <timeline-landing />
+  </block>
+
+  <block wx:else>
   <scroll-view class="content-scroll" scroll-y="{{mineScrollable}}" enhanced="{{true}}" show-scrollbar="{{false}}">
     <view class="content-inner">
       <view class="topbar" style="height: {{navHeightPx}}px;"></view>
@@ -25,7 +30,13 @@
             <view class="chevron">›</view>
           </view>
         </view>
-        <view class="asset-row layer-a" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+        <view class="asset-row layer-a" bindtap="onTapCategoryManage" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="asset-label">分类管理</view>
+          <view class="asset-right">
+            <view class="chevron">›</view>
+          </view>
+        </view>
+        <view class="asset-row layer-b" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
           <view class="asset-label">重置启动暗号</view>
           <view class="asset-right">
             <view class="chevron">›</view>
@@ -103,40 +114,6 @@
     </view>
   </view>
 
-  <view wx:if="{{exportStage === 'shareGate' || (exportStage === 'sharingBackup' && exportShareReady)}}" class="share-gate-mask" bindtap="onCloseExportShareGate">
-    <view class="share-gate-panel" catchtap="noop">
-      <view class="share-gate-title">{{exportShareReady ? '导出备份' : '推荐后导出'}}</view>
-      <view wx:if="{{exportShareReady}}" class="share-gate-desc">将加密密码内容分享到自己的小号，方便下次导入使用</view>
-      <view wx:if="{{!exportShareReady}}" class="share-gate-safe-note">仅推荐小程序，不会分享你的密码内容</view>
-      <image class="share-gate-image" src="/assets/mimama-share.png" mode="aspectFit" />
-
-      <view wx:if="{{!exportShareReady}}" class="share-gate-actions">
-        <button
-          class="share-gate-btn share-gate-share"
-          open-type="share"
-          bindtap="onTapShareFriendForExport"
-          hover-class="light-press-active"
-          hover-start-time="0"
-          hover-stay-time="28"
-        >
-          推荐给好友
-        </button>
-      </view>
-
-      <button
-        wx:if="{{exportShareReady}}"
-        class="share-gate-export-ready"
-        loading="{{exportStage === 'sharingBackup'}}"
-        bindtap="onContinueExportAfterShare"
-        hover-class="light-press-active"
-        hover-start-time="0"
-        hover-stay-time="28"
-      >
-        {{exportStage === 'sharingBackup' ? '导出中...' : '导出备份'}}
-      </button>
-    </view>
-  </view>
-
   <app-dialog
     visible="{{dialog.visible}}"
     title="{{dialog.title}}"
@@ -149,4 +126,5 @@
     bindconfirm="onDialogConfirm"
     bindcancel="onDialogCancel"
   />
+  </block>
 </view>

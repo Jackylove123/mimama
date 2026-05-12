@@ -1,11 +1,11 @@
-import type { VaultCategory, VaultCategorySource } from '../types/vault'
+import type { SystemVaultCategory, VaultCategory, VaultCategorySource } from '../types/vault'
 
 export interface CategoryOption {
   key: VaultCategory
   label: string
 }
 
-export const CATEGORY_OPTIONS: CategoryOption[] = [
+export const SYSTEM_CATEGORY_OPTIONS: Array<{ key: SystemVaultCategory; label: string }> = [
   { key: 'social', label: '社交' },
   { key: 'email', label: '邮箱' },
   { key: 'finance', label: '财务' },
@@ -13,7 +13,9 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
   { key: 'others', label: '其他' },
 ]
 
-export const CATEGORY_LABELS: Record<VaultCategory, string> = {
+export const CATEGORY_OPTIONS: CategoryOption[] = SYSTEM_CATEGORY_OPTIONS
+
+export const CATEGORY_LABELS: Record<SystemVaultCategory, string> = {
   social: '社交',
   email: '邮箱',
   finance: '财务',
@@ -129,12 +131,24 @@ export const normalizeCategory = (
   return inferCategoryByTitle(fallbackTitle)
 }
 
-export const isCategory = (value: unknown): value is VaultCategory => {
+export const isCategory = (value: unknown): value is SystemVaultCategory => {
   return value === 'social' || value === 'email' || value === 'finance' || value === 'website' || value === 'others'
 }
 
 export const isCategorySource = (value: unknown): value is VaultCategorySource => {
   return value === 'manual' || value === 'icon' || value === 'keyword' || value === 'default'
+}
+
+export const getCategoryLabel = (category: VaultCategory, customLabels?: Record<string, string>): string => {
+  if (isCategory(category)) {
+    return CATEGORY_LABELS[category]
+  }
+
+  if (customLabels && typeof customLabels[category] === 'string' && customLabels[category].trim()) {
+    return customLabels[category]
+  }
+
+  return category || CATEGORY_LABELS.others
 }
 
 const matchRule = (normalized: string, rules: Array<{ category: VaultCategory; keywords: string[] }>) => {

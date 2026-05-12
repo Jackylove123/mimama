@@ -6,6 +6,7 @@
   "enableShareAppMessage": true,
   "enableShareTimeline": true,
   "usingComponents": {
-    "app-dialog": "/components/app-dialog/index"
+    "app-dialog": "/components/app-dialog/index",
+    "timeline-landing": "/components/timeline-landing/index"
   }
 }

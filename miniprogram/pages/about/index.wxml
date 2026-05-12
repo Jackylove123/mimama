@@ -11,11 +11,10 @@
       <view class="entry-title">隐私协议</view>
       <view class="entry-chevron">›</view>
     </view>
-    <view class="entry-row entry-row-divider" bindtap="onTapVersion" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+    <view class="entry-row entry-row-divider">
       <view class="entry-title">版本信息</view>
       <view class="entry-value-wrap">
-        <view class="entry-value">V 1.0</view>
-        <view class="entry-chevron">›</view>
+        <view class="entry-value">V 1.2</view>
       </view>
     </view>
   </view>

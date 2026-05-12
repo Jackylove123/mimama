@@ -1,4 +1,9 @@
 <view class="page">
+  <block wx:if="{{singlePageMode}}">
+    <timeline-landing />
+  </block>
+
+  <block wx:else>
   <view class="brand">
     <view class="brand-row">
       <image class="logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
@@ -81,4 +86,5 @@
       </view>
     </view>
   </view>
+  </block>
 </view>

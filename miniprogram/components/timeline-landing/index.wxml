@@ -1,0 +1,20 @@
+<view class="timeline-page">
+  <view class="timeline-brand">
+    <view class="timeline-brand-row">
+      <image class="timeline-logo-image" src="/assets/mimama-logo.png" mode="aspectFill" />
+      <image class="timeline-brand-title-image" src="/assets/mimama-title-pin.png" mode="widthFix" />
+    </view>
+    <view class="timeline-brand-tagline">密码只存本地，更安心</view>
+  </view>
+
+  <view class="timeline-card">
+    <view class="timeline-title">请前往小程序继续</view>
+    <view class="timeline-divider"></view>
+    <view class="timeline-tip">点底部“前往小程序”后，即可免费使用。</view>
+    <view class="timeline-divider"></view>
+    <view class="timeline-trust-row">
+      <view class="timeline-trust-icon">盾</view>
+      <view class="timeline-trust-text">密麻麻是纯本地工具，不登录、不上传。</view>
+    </view>
+  </view>
+</view>

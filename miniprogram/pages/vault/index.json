@@ -7,5 +7,7 @@
   "enableShareAppMessage": true,
   "enableShareTimeline": true,
   "disableScroll": true,
-  "usingComponents": {}
+  "usingComponents": {
+    "timeline-landing": "/components/timeline-landing/index"
+  }
 }

@@ -1,5 +1,5 @@
 import { getVaultRepository } from '../../services/vault-repository'
-import { CATEGORY_LABELS, CATEGORY_OPTIONS, inferCategoryByTitle, isCategory } from '../../services/category-engine'
+import { CATEGORY_LABELS, getCategoryLabel, inferCategoryByTitle, isCategory } from '../../services/category-engine'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { generatePassword } from '../../utils/password'
 import type { VaultCategory, VaultCategorySource } from '../../types/vault'
@@ -18,7 +18,7 @@ Page({
     category: 'others' as VaultCategory,
     categorySource: 'default' as VaultCategorySource,
     categoryLabel: CATEGORY_LABELS.others,
-    categoryOptions: CATEGORY_OPTIONS,
+    categoryOptions: [] as Array<{ key: VaultCategory; label: string }>,
     categorySheetVisible: false,
     manualCategory: false,
     autoCategoryEnabled: true,
@@ -45,11 +45,12 @@ Page({
       return
     }
 
-    if (isCategory(presetCategory)) {
+    if (typeof presetCategory === 'string' && presetCategory.trim()) {
+      const normalizedPreset = presetCategory.trim()
       this.setData({
-        category: presetCategory,
-        categorySource: 'default',
-        categoryLabel: CATEGORY_LABELS[presetCategory],
+        category: normalizedPreset,
+        categorySource: isCategory(normalizedPreset) ? 'default' : 'manual',
+        categoryLabel: getCategoryLabel(normalizedPreset),
         manualCategory: false,
         autoCategoryEnabled: false,
       })
@@ -74,7 +75,11 @@ Page({
 
     if (this.data.isEdit) {
       this.loadItem()
+      this.loadCategoryOptions()
+      return
     }
+
+    this.loadCategoryOptions()
   },
 
   onInput(event: WechatMiniprogram.CustomEvent) {
@@ -98,7 +103,7 @@ Page({
       const inferred = inferCategoryByTitle(basis)
       nextState.category = inferred.category
       nextState.categorySource = inferred.source
-      nextState.categoryLabel = CATEGORY_LABELS[inferred.category]
+      nextState.categoryLabel = getCategoryLabel(inferred.category)
     }
 
     this.setData(nextState)
@@ -139,7 +144,7 @@ Page({
     this.setData({
       category: key,
       categorySource: 'manual',
-      categoryLabel: CATEGORY_LABELS[key],
+      categoryLabel: this.findCategoryLabel(key),
       manualCategory: true,
       categorySheetVisible: false,
     })
@@ -245,9 +250,34 @@ Page({
       note: item.note,
       category: item.category,
       categorySource: item.categorySource,
-      categoryLabel: CATEGORY_LABELS[item.category],
+      categoryLabel: this.findCategoryLabel(item.category),
       manualCategory: item.categorySource === 'manual',
     })
+  },
+
+  async loadCategoryOptions() {
+    try {
+      const categories = await repository.listCategories()
+      const options = categories.map((category) => ({
+        key: category.id || category.key,
+        label: category.label,
+      }))
+      this.setData({
+        categoryOptions: options,
+        categoryLabel: this.findCategoryLabel(this.data.category, options),
+      })
+    } catch (error) {
+      console.warn('Failed to load category options on edit page:', error)
+    }
+  },
+
+  findCategoryLabel(categoryKey: VaultCategory, options?: Array<{ key: VaultCategory; label: string }>) {
+    const source = options || this.data.categoryOptions
+    const matched = source.find((option) => option.key === categoryKey)
+    if (matched) {
+      return matched.label
+    }
+    return getCategoryLabel(categoryKey)
   },
 
   navigateAfterSave() {

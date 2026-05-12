@@ -1,9 +1,10 @@
 import { getVaultRepository } from '../../services/vault-repository'
-import { CATEGORY_LABELS, CATEGORY_OPTIONS } from '../../services/category-engine'
+import { CATEGORY_LABELS, getCategoryLabel } from '../../services/category-engine'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { formatRelativeTime } from '../../utils/date'
 import { maskPassword } from '../../utils/password'
-import type { BackupReminder, VaultCategory, VaultItem } from '../../types/vault'
+import { isTimelineSinglePageMode } from '../../utils/timeline-mode'
+import type { BackupReminder, SystemVaultCategory, VaultCategory, VaultItem } from '../../types/vault'
 
 const repository = getVaultRepository()
 
@@ -15,7 +16,7 @@ interface VaultCard {
   passwordPlain: string
   updatedText: string
   note: string
-  category: VaultCategory
+  categoryId: VaultCategory
   revealed: boolean
 }
 
@@ -48,28 +49,23 @@ const DRAG_OVERFLOW_FACTOR = 0.36
 let revealTimer: number | undefined
 let searchDebounceTimer: number | undefined
 
-const FILTER_PILLS: Array<{ key: 'all' | VaultCategory; label: string }> = [
-  { key: 'all', label: '全部' },
-  ...CATEGORY_OPTIONS.map((option) => ({
-    key: option.key,
-    label: option.label,
-  })),
-]
-const CATEGORY_ORDER: VaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
-const CATEGORY_SEQUENCE: Array<'all' | VaultCategory> = ['all', ...CATEGORY_ORDER]
+const SYSTEM_CATEGORY_ORDER: SystemVaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const HEADER_COLLAPSE_SCROLL_TOP = 24
 const PENDING_CATEGORY_KEY = 'mimama.pendingCategory'
 const SHARE_TITLE = '密麻麻｜本地密码管理工具'
 const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
 const SHARE_IMAGE = '/assets/mimama-share.png'
-const panelScrollTops: number[] = Array(CATEGORY_SEQUENCE.length).fill(0)
+const panelScrollTopMap: Record<string, number> = {}
+let latestLoadRequestId = 0
 
 Page({
   data: {
     query: '',
     cards: [] as VaultCard[],
     categoryPanels: [] as CategoryPanel[],
-    pills: FILTER_PILLS,
+    pills: [] as Array<{ key: 'all' | VaultCategory; label: string }>,
+    categoryOrder: [...SYSTEM_CATEGORY_ORDER] as VaultCategory[],
+    categoryLabelMap: buildSystemLabelMap(),
     activeCategory: 'all' as 'all' | VaultCategory,
     currentCategoryIndex: 0,
     compactHeader: false,
@@ -95,11 +91,13 @@ Page({
     dragStyle: '',
     dragDirty: false,
     dragLastSwapAt: 0,
+    singlePageMode: false,
   },
 
   onLoad() {
     this.applyAdaptiveLayout()
     this.setupShareMenu()
+    this.syncEntryMode()
   },
 
   setupShareMenu() {
@@ -132,21 +130,12 @@ Page({
   onShow() {
     this.applyAdaptiveLayout()
 
-    if (!ensureUnlocked('/pages/vault/index')) {
+    if (this.syncEntryMode()) {
       return
     }
 
-    const pendingCategory = this.consumePendingCategory()
-    if (pendingCategory) {
-      const index = CATEGORY_SEQUENCE.indexOf(pendingCategory)
-      if (index >= 0) {
-        this.setData({
-          activeCategory: pendingCategory,
-          currentCategoryIndex: index,
-          pillScrollIntoView: `pill-${pendingCategory}`,
-          compactHeader: panelScrollTops[index] > HEADER_COLLAPSE_SCROLL_TOP,
-        })
-      }
+    if (!ensureUnlocked('/pages/vault/index')) {
+      return
     }
 
     this.loadData({
@@ -167,6 +156,18 @@ Page({
     this.clearRevealTimer()
     this.clearSearchDebounceTimer()
     this.stopDragging()
+  },
+
+  syncEntryMode() {
+    const isSinglePage = isTimelineSinglePageMode()
+    if (isSinglePage === this.data.singlePageMode) {
+      return isSinglePage
+    }
+
+    this.setData({
+      singlePageMode: isSinglePage,
+    })
+    return isSinglePage
   },
 
   onPullDownRefresh() {
@@ -205,7 +206,7 @@ Page({
       return
     }
 
-    const index = CATEGORY_SEQUENCE.indexOf(key)
+    const index = getCategorySequence(this.data.categoryOrder).indexOf(key)
     if (index < 0) {
       return
     }
@@ -218,8 +219,21 @@ Page({
       return
     }
 
+    const currentItemId = (event.detail as { currentItemId?: string }).currentItemId
+    if (typeof currentItemId === 'string' && currentItemId) {
+      const categorySequenceById = getCategorySequence(this.data.categoryOrder)
+      const keyedIndex = categorySequenceById.indexOf(currentItemId as 'all' | VaultCategory)
+      if (keyedIndex >= 0) {
+        if (keyedIndex !== this.data.currentCategoryIndex || currentItemId !== this.data.activeCategory) {
+          this.applyCategoryByIndex(keyedIndex)
+        }
+        return
+      }
+    }
+
     const index = event.detail.current
-    if (typeof index !== 'number' || index < 0 || index >= CATEGORY_SEQUENCE.length) {
+    const categorySequence = getCategorySequence(this.data.categoryOrder)
+    if (typeof index !== 'number' || index < 0 || index >= categorySequence.length) {
       return
     }
 
@@ -232,13 +246,14 @@ Page({
 
   onPanelScroll(event: WechatMiniprogram.CustomEvent<{ scrollTop?: number }>) {
     const index = Number(event.currentTarget.dataset.index)
-    if (!Number.isFinite(index) || index < 0 || index >= CATEGORY_SEQUENCE.length) {
+    const categorySequence = getCategorySequence(this.data.categoryOrder)
+    if (!Number.isFinite(index) || index < 0 || index >= categorySequence.length) {
       return
     }
 
     const rawScrollTop = event.detail && typeof event.detail.scrollTop === 'number' ? event.detail.scrollTop : 0
     const scrollTop = Math.max(0, rawScrollTop)
-    panelScrollTops[index] = scrollTop
+    setPanelScrollTop(panelScrollTopMap, categorySequence, index, scrollTop)
 
     if (index !== this.data.currentCategoryIndex) {
       return
@@ -252,11 +267,12 @@ Page({
 
   onPanelScrollToUpper(event: WechatMiniprogram.CustomEvent) {
     const index = Number(event.currentTarget.dataset.index)
-    if (!Number.isFinite(index) || index < 0 || index >= CATEGORY_SEQUENCE.length) {
+    const categorySequence = getCategorySequence(this.data.categoryOrder)
+    if (!Number.isFinite(index) || index < 0 || index >= categorySequence.length) {
       return
     }
 
-    panelScrollTops[index] = 0
+    setPanelScrollTop(panelScrollTopMap, categorySequence, index, 0)
     if (index === this.data.currentCategoryIndex && this.data.compactHeader) {
       this.setData({ compactHeader: false })
     }
@@ -362,6 +378,7 @@ Page({
   },
 
   async loadData(options?: { silent?: boolean; animate?: boolean }) {
+    const requestId = ++latestLoadRequestId
     const silent = options && options.silent
     const animate = !(options && options.animate === false)
 
@@ -370,8 +387,28 @@ Page({
     }
 
     try {
+      const categoryMetaReady = await this.loadCategoryMeta(requestId)
+      if (!categoryMetaReady || requestId !== latestLoadRequestId) {
+        return
+      }
+      const pendingCategory = this.consumePendingCategory()
+      if (pendingCategory) {
+        const categorySequence = getCategorySequence(this.data.categoryOrder)
+        const index = categorySequence.indexOf(pendingCategory)
+        if (index >= 0) {
+          this.setData({
+            activeCategory: pendingCategory,
+            currentCategoryIndex: index,
+            pillScrollIntoView: `pill-${pendingCategory}`,
+            compactHeader: getPanelScrollTop(panelScrollTopMap, categorySequence, index) > HEADER_COLLAPSE_SCROLL_TOP,
+          })
+        }
+      }
       // Load cards first to reduce startup blocking risk on large datasets.
-      await this.loadCards(animate)
+      await this.loadCards(animate, requestId)
+      if (requestId !== latestLoadRequestId) {
+        return
+      }
       this.setData({ loadedOnce: true })
       // Reminder can be loaded lazily without blocking first meaningful paint.
       setTimeout(() => {
@@ -392,8 +429,33 @@ Page({
     }
   },
 
-  async loadCards(animate = true) {
+  async loadCategoryMeta(requestId?: number) {
+    const categories = await repository.listCategories()
+    if (typeof requestId === 'number' && requestId !== latestLoadRequestId) {
+      return false
+    }
+    const categoryOrder = categories.map((category) => category.id || category.key)
+    const categoryLabelMap = buildCategoryLabelMap(categories)
+    const pills = buildPills(categoryOrder, categoryLabelMap)
+    const categorySequence = getCategorySequence(categoryOrder)
+    const activeCategory = categorySequence.includes(this.data.activeCategory) ? this.data.activeCategory : 'all'
+    const currentCategoryIndex = categorySequence.indexOf(activeCategory)
+    this.setData({
+      categoryOrder,
+      categoryLabelMap,
+      pills,
+      activeCategory,
+      currentCategoryIndex: currentCategoryIndex < 0 ? 0 : currentCategoryIndex,
+      pillScrollIntoView: `pill-${activeCategory}`,
+    })
+    return true
+  },
+
+  async loadCards(animate = true, requestId?: number) {
     const items = await repository.searchItems(this.data.query, 'all')
+    if (typeof requestId === 'number' && requestId !== latestLoadRequestId) {
+      return
+    }
     const cards = items.map((item) => toCard(item, this.data.revealedId))
     this.setData({ cards })
     this.buildCategoryPanels(cards, undefined, { animate })
@@ -559,7 +621,7 @@ Page({
       return
     }
 
-    const orderedIds = this.data.cards.filter((card) => card.category === activeCategory).map((card) => card.id)
+    const orderedIds = this.data.cards.filter((card) => card.categoryId === activeCategory).map((card) => card.id)
 
     this.stopDragging()
 
@@ -581,11 +643,12 @@ Page({
   },
 
   applyCategoryByIndex(nextIndex: number) {
-    if (nextIndex < 0 || nextIndex >= CATEGORY_SEQUENCE.length) {
+    const categorySequence = getCategorySequence(this.data.categoryOrder)
+    if (nextIndex < 0 || nextIndex >= categorySequence.length) {
       return
     }
 
-    const nextCategory = CATEGORY_SEQUENCE[nextIndex]
+    const nextCategory = categorySequence[nextIndex]
     if (nextCategory === this.data.activeCategory && nextIndex === this.data.currentCategoryIndex) {
       return
     }
@@ -594,7 +657,7 @@ Page({
       activeCategory: nextCategory,
       currentCategoryIndex: nextIndex,
       pillScrollIntoView: `pill-${nextCategory}`,
-      compactHeader: panelScrollTops[nextIndex] > HEADER_COLLAPSE_SCROLL_TOP,
+      compactHeader: getPanelScrollTop(panelScrollTopMap, categorySequence, nextIndex) > HEADER_COLLAPSE_SCROLL_TOP,
     }
 
     this.setData(nextState)
@@ -618,7 +681,7 @@ Page({
     const cards = [...this.data.cards]
     const categoryIndexes: number[] = []
     cards.forEach((card, index) => {
-      if (card.category === activeCategory) {
+      if (card.categoryId === activeCategory) {
         categoryIndexes.push(index)
       }
     })
@@ -667,20 +730,36 @@ Page({
   },
 
   buildCategoryPanels(cards: VaultCard[], activeCategory?: 'all' | VaultCategory, options?: { animate?: boolean }) {
+    const safeCategoryOrder = buildSafeCategoryOrder(this.data.categoryOrder, cards)
+    const categorySequence = getCategorySequence(safeCategoryOrder)
     const targetCategory = typeof activeCategory === 'undefined' ? this.data.activeCategory : activeCategory
-    const targetIndex = CATEGORY_SEQUENCE.indexOf(targetCategory)
-    const safeIndex = targetIndex >= 0 ? targetIndex : 0
-    const categoryPanels = buildPanelsByCategory(cards)
-    const currentPanel = categoryPanels[safeIndex]
-    const nextCompact = currentPanel && currentPanel.scrollable ? panelScrollTops[safeIndex] > HEADER_COLLAPSE_SCROLL_TOP : false
-    const animate = !(options && options.animate === false)
-    const nextData: Record<string, unknown> = {
-      categoryPanels,
-      activeCategory: CATEGORY_SEQUENCE[safeIndex],
-      currentCategoryIndex: safeIndex,
-      pillScrollIntoView: `pill-${CATEGORY_SEQUENCE[safeIndex]}`,
-      compactHeader: nextCompact,
+    const targetIndex = categorySequence.indexOf(targetCategory)
+    let safeIndex = targetIndex >= 0 ? targetIndex : 0
+    const categoryPanels = buildPanelsByCategory(cards, safeCategoryOrder, this.data.categoryLabelMap)
+    const targetPanel = categoryPanels[safeIndex]
+    if (cards.length > 0 && targetCategory !== 'all' && (!targetPanel || targetPanel.sections.length === 0)) {
+      const firstNonEmptyIndex = categoryPanels.findIndex((panel, index) => index > 0 && panel.sections.length > 0)
+      safeIndex = firstNonEmptyIndex > 0 ? firstNonEmptyIndex : 0
     }
+    const currentPanel = categoryPanels[safeIndex]
+    const nextCompact =
+      currentPanel && currentPanel.scrollable
+        ? getPanelScrollTop(panelScrollTopMap, categorySequence, safeIndex) > HEADER_COLLAPSE_SCROLL_TOP
+        : false
+    const animate = !(options && options.animate === false)
+    const nextCategory = categorySequence[safeIndex]
+    const nextData: Record<string, unknown> = {}
+    if (!isSameCategoryOrder(this.data.categoryOrder, safeCategoryOrder)) {
+      nextData.categoryOrder = safeCategoryOrder
+      nextData.pills = buildPills(safeCategoryOrder, this.data.categoryLabelMap)
+    }
+    Object.assign(nextData, {
+      categoryPanels,
+      activeCategory: nextCategory,
+      currentCategoryIndex: safeIndex,
+      pillScrollIntoView: `pill-${nextCategory}`,
+      compactHeader: nextCompact,
+    })
 
     if (animate) {
       nextData.listFadeToken = this.data.listFadeToken + 1
@@ -735,7 +814,7 @@ Page({
       return null
     }
 
-    if (raw === 'all' || CATEGORY_ORDER.includes(raw as VaultCategory)) {
+    if (raw === 'all' || this.data.categoryOrder.includes(raw as VaultCategory)) {
       return raw as 'all' | VaultCategory
     }
 
@@ -744,6 +823,7 @@ Page({
 })
 
 const toCard = (item: VaultItem, revealedId: string): VaultCard => {
+  const categoryId = resolveVaultItemCategoryId(item)
   return {
     id: item.id,
     title: item.title,
@@ -752,14 +832,70 @@ const toCard = (item: VaultItem, revealedId: string): VaultCard => {
     passwordPlain: item.password,
     updatedText: formatRelativeTime(item.updatedAt),
     note: item.note,
-    category: item.category,
+    categoryId,
     revealed: item.id === revealedId,
   }
 }
 
-const buildPanelsByCategory = (cards: VaultCard[]): CategoryPanel[] => {
-  return CATEGORY_SEQUENCE.map((categoryKey) => {
-    const sections = buildSectionsByCategory(cards, categoryKey)
+function buildSystemLabelMap(): Record<string, string> {
+  return {
+    social: CATEGORY_LABELS.social,
+    email: CATEGORY_LABELS.email,
+    finance: CATEGORY_LABELS.finance,
+    website: CATEGORY_LABELS.website,
+    others: CATEGORY_LABELS.others,
+  }
+}
+
+const buildCategoryLabelMap = (categories: Array<{ key: string; label: string }>): Record<string, string> => {
+  const map = buildSystemLabelMap()
+  categories.forEach((category) => {
+    const key = (category as { id?: string; key: string }).id || category.key
+    if (!key || !category.label) {
+      return
+    }
+    map[key] = category.label
+  })
+  return map
+}
+
+const getCategorySequence = (categoryOrder: VaultCategory[]): Array<'all' | VaultCategory> => {
+  return ['all', ...categoryOrder]
+}
+
+const buildPills = (categoryOrder: VaultCategory[], categoryLabelMap: Record<string, string>) => {
+  return [
+    { key: 'all' as const, label: '全部' },
+    ...categoryOrder.map((key) => ({
+      key,
+      label: getCategoryLabel(key, categoryLabelMap),
+    })),
+  ]
+}
+
+const getPanelScrollTop = (map: Record<string, number>, categorySequence: Array<'all' | VaultCategory>, index: number) => {
+  const key = categorySequence[index]
+  return typeof map[key] === 'number' ? map[key] : 0
+}
+
+const setPanelScrollTop = (
+  map: Record<string, number>,
+  categorySequence: Array<'all' | VaultCategory>,
+  index: number,
+  value: number,
+) => {
+  const key = categorySequence[index]
+  map[key] = value
+}
+
+const buildPanelsByCategory = (
+  cards: VaultCard[],
+  categoryOrder: VaultCategory[],
+  categoryLabelMap: Record<string, string>,
+): CategoryPanel[] => {
+  const categorySequence = getCategorySequence(categoryOrder)
+  return categorySequence.map((categoryKey) => {
+    const sections = buildSectionsByCategory(cards, categoryKey, categoryOrder, categoryLabelMap)
     return {
       key: categoryKey,
       sections,
@@ -768,9 +904,14 @@ const buildPanelsByCategory = (cards: VaultCard[]): CategoryPanel[] => {
   })
 }
 
-const buildSectionsByCategory = (cards: VaultCard[], activeCategory: 'all' | VaultCategory): VaultSection[] => {
+const buildSectionsByCategory = (
+  cards: VaultCard[],
+  activeCategory: 'all' | VaultCategory,
+  categoryOrder: VaultCategory[],
+  categoryLabelMap: Record<string, string>,
+): VaultSection[] => {
   if (activeCategory !== 'all') {
-    const filtered = cards.filter((card) => card.category === activeCategory)
+    const filtered = cards.filter((card) => card.categoryId === activeCategory)
     if (filtered.length === 0) {
       return []
     }
@@ -778,22 +919,84 @@ const buildSectionsByCategory = (cards: VaultCard[], activeCategory: 'all' | Vau
     return [
       {
         key: activeCategory,
-        label: CATEGORY_LABELS[activeCategory],
+        label: getCategoryLabel(activeCategory, categoryLabelMap),
         count: filtered.length,
         cards: filtered,
       },
     ]
   }
 
-  return CATEGORY_ORDER.map((categoryKey) => {
-    const sectionCards = cards.filter((card) => card.category === categoryKey)
+  return categoryOrder
+    .map((categoryKey) => {
+    const sectionCards = cards.filter((card) => card.categoryId === categoryKey)
     return {
       key: categoryKey,
-      label: CATEGORY_LABELS[categoryKey],
+      label: getCategoryLabel(categoryKey, categoryLabelMap),
       count: sectionCards.length,
       cards: sectionCards,
     }
-  }).filter((section) => section.count > 0)
+    })
+    .filter((section) => section.count > 0)
+    .concat(
+      collectUnorderedSections(cards, categoryOrder, categoryLabelMap),
+    )
+}
+
+const collectUnorderedSections = (
+  cards: VaultCard[],
+  categoryOrder: VaultCategory[],
+  categoryLabelMap: Record<string, string>,
+): VaultSection[] => {
+  const known = new Set(categoryOrder)
+  const extras = Array.from(new Set(cards.map((card) => card.categoryId).filter((category) => !known.has(category))))
+  return extras
+    .map((categoryKey) => {
+      const sectionCards = cards.filter((card) => card.categoryId === categoryKey)
+      return {
+        key: categoryKey,
+        label: getCategoryLabel(categoryKey, categoryLabelMap),
+        count: sectionCards.length,
+        cards: sectionCards,
+      }
+    })
+    .filter((section) => section.count > 0)
+}
+
+const isSameCategoryOrder = (a: VaultCategory[], b: VaultCategory[]) => {
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+const buildSafeCategoryOrder = (categoryOrder: VaultCategory[], cards: VaultCard[]): VaultCategory[] => {
+  const nextOrder = [...categoryOrder]
+  const known = new Set(nextOrder)
+  cards.forEach((card) => {
+    if (!card.categoryId || known.has(card.categoryId)) {
+      return
+    }
+    known.add(card.categoryId)
+    nextOrder.push(card.categoryId)
+  })
+  return nextOrder
+}
+
+const resolveVaultItemCategoryId = (item: VaultItem): VaultCategory => {
+  if (typeof item.categoryId === 'string' && item.categoryId.trim()) {
+    return item.categoryId.trim()
+  }
+
+  if (typeof item.category === 'string' && item.category.trim()) {
+    return item.category.trim()
+  }
+
+  return 'others'
 }
 
 const copyText = (value: string, title: string) => {
