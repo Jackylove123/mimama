@@ -24,6 +24,11 @@
     <view wx:if="{{query}}" class="clear" bindtap="onClearQuery" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">清空</view>
   </view>
 
+  <view wx:if="{{passcodeHintVisible}}" class="passcode-hint">
+    <view class="passcode-hint-text">{{passcodeHintText}}</view>
+    <view class="passcode-hint-action" bindtap="onTapSetPasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">去设置</view>
+  </view>
+
   <scroll-view
     class="pill-scroll"
     scroll-x
@@ -140,5 +145,16 @@
   >
     <text class="fab-plus">+</text>
   </view>
+
+  <app-dialog
+    visible="{{passcodeGuideVisible}}"
+    title="建议开启启动保护"
+    content="设置6位启动暗号，为你的本地密码再加一层保护"
+    showCancel="{{true}}"
+    cancelText="放弃保护"
+    confirmText="马上保护"
+    bindconfirm="onPasscodeGuideConfirm"
+    bindcancel="onPasscodeGuideCancel"
+  />
   </block>
 </view>

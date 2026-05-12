@@ -1,11 +1,13 @@
 import { getVaultRepository } from '../../services/vault-repository'
 import { CATEGORY_LABELS, getCategoryLabel, inferCategoryByTitle, isCategory } from '../../services/category-engine'
+import { isPasscodeEnabled } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { generatePassword } from '../../utils/password'
 import type { VaultCategory, VaultCategorySource } from '../../types/vault'
 
 const repository = getVaultRepository()
 const NOTE_MAX_LENGTH = 200
+const PENDING_PASSCODE_GUIDE_KEY = 'mimama.pendingPasscodeGuide'
 
 Page({
   data: {
@@ -151,6 +153,7 @@ Page({
   },
 
   async onTapSave() {
+    const isCreate = !this.data.isEdit
     const title = this.data.title.trim()
     const account = this.data.account.trim()
     const password = this.data.password
@@ -170,6 +173,12 @@ Page({
     this.setData({ saving: true })
 
     try {
+      let shouldGuideAfterSave = false
+      if (isCreate) {
+        const passcodeEnabled = await isPasscodeEnabled()
+        shouldGuideAfterSave = !passcodeEnabled
+      }
+
       await repository.upsertItem({
         id: this.data.id || undefined,
         title,
@@ -183,11 +192,15 @@ Page({
       try {
         wx.setStorageSync('mimama.pendingCategory', this.data.category)
       } catch (_error) {}
+      try {
+        if (shouldGuideAfterSave) {
+          wx.setStorageSync(PENDING_PASSCODE_GUIDE_KEY, 1)
+        }
+      } catch (_error) {
+        // ignore storage write failure
+      }
 
-      wx.showToast({
-        title: '已保存',
-        icon: 'success',
-      })
+      wx.showToast({ title: '已保存', icon: 'success' })
 
       this.navigateAfterSave()
     } catch (_error) {

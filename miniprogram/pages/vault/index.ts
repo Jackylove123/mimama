@@ -1,5 +1,6 @@
 import { getVaultRepository } from '../../services/vault-repository'
 import { CATEGORY_LABELS, getCategoryLabel } from '../../services/category-engine'
+import { isPasscodeEnabledSync } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { formatRelativeTime } from '../../utils/date'
 import { maskPassword } from '../../utils/password'
@@ -52,8 +53,9 @@ let searchDebounceTimer: number | undefined
 const SYSTEM_CATEGORY_ORDER: SystemVaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const HEADER_COLLAPSE_SCROLL_TOP = 24
 const PENDING_CATEGORY_KEY = 'mimama.pendingCategory'
+const PENDING_PASSCODE_GUIDE_KEY = 'mimama.pendingPasscodeGuide'
 const SHARE_TITLE = '密麻麻｜本地密码管理工具'
-const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
+const SHARE_PATH = '/pages/vault/index'
 const SHARE_IMAGE = '/assets/mimama-share.png'
 const panelScrollTopMap: Record<string, number> = {}
 let latestLoadRequestId = 0
@@ -76,6 +78,9 @@ Page({
     reminderLevel: 'none',
     reminderMessage: '',
     reminderActionText: '',
+    passcodeHintVisible: false,
+    passcodeHintText: '你还没设置启动暗号，建议尽快设置以保护本地密码数据',
+    passcodeGuideVisible: false,
     listFadeToken: 0,
     pillScrollIntoView: 'pill-all',
     loadedOnce: false,
@@ -141,7 +146,10 @@ Page({
     this.loadData({
       silent: this.data.loadedOnce,
       animate: !this.data.loadedOnce,
+    }).finally(() => {
+      this.tryOpenPasscodeGuide()
     })
+    this.refreshPasscodeHint()
   },
 
   onUnload() {
@@ -286,6 +294,27 @@ Page({
     })
   },
 
+  onTapSetPasscode() {
+    wx.navigateTo({
+      url: '/pages/passcode/index?mode=set',
+    })
+  },
+
+  onPasscodeGuideCancel() {
+    this.setData({
+      passcodeGuideVisible: false,
+    })
+  },
+
+  onPasscodeGuideConfirm() {
+    this.setData({
+      passcodeGuideVisible: false,
+    })
+    wx.navigateTo({
+      url: '/pages/passcode/index?mode=set',
+    })
+  },
+
   onOpenDetail(event: WechatMiniprogram.BaseEvent) {
     if (this.data.draggingId) {
       return
@@ -416,6 +445,7 @@ Page({
           console.warn('Failed to load backup reminder:', error)
         })
       }, 0)
+      this.refreshPasscodeHint()
     } catch (error) {
       console.error('Failed to load vault page data:', error)
       wx.showToast({
@@ -464,6 +494,39 @@ Page({
   async loadReminder() {
     const reminder = await repository.getBackupReminder()
     this.setReminder(reminder)
+  },
+
+  refreshPasscodeHint() {
+    this.setData({
+      passcodeHintVisible: !isPasscodeEnabledSync(),
+    })
+  },
+
+  tryOpenPasscodeGuide() {
+    if (isPasscodeEnabledSync()) {
+      return
+    }
+
+    if (!this.consumePendingPasscodeGuide()) {
+      return
+    }
+
+    this.setData({
+      passcodeGuideVisible: true,
+    })
+  },
+
+  consumePendingPasscodeGuide() {
+    try {
+      const value = wx.getStorageSync(PENDING_PASSCODE_GUIDE_KEY)
+      if (!value) {
+        return false
+      }
+      wx.removeStorageSync(PENDING_PASSCODE_GUIDE_KEY)
+      return true
+    } catch (_error) {
+      return false
+    }
   },
 
   syncCardsRevealState() {

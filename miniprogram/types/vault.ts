@@ -82,6 +82,7 @@ export interface TxtImportResult {
 
 export interface VaultStatus {
   initialized: boolean
+  passcodeEnabled: boolean
   recordCount: number
   recycleCount: number
   lastBackupAt: number

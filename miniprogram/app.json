@@ -1,7 +1,7 @@
 {
   "pages": [
-    "pages/pin/index",
     "pages/vault/index",
+    "pages/pin/index",
     "pages/mine/index",
     "pages/profile/index",
     "pages/about/index",

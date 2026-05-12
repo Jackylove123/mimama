@@ -8,6 +8,7 @@
   "enableShareTimeline": true,
   "disableScroll": true,
   "usingComponents": {
-    "timeline-landing": "/components/timeline-landing/index"
+    "timeline-landing": "/components/timeline-landing/index",
+    "app-dialog": "/components/app-dialog/index"
   }
 }

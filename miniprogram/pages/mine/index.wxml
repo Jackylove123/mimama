@@ -37,7 +37,13 @@
           </view>
         </view>
         <view class="asset-row layer-b" bindtap="onTapChangePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
-          <view class="asset-label">重置启动暗号</view>
+          <view class="asset-label">{{passcodeEntryLabel}}</view>
+          <view class="asset-right">
+            <view class="chevron">›</view>
+          </view>
+        </view>
+        <view wx:if="{{passcodeEnabled}}" class="asset-row layer-a" bindtap="onTapDisablePasscode" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">
+          <view class="asset-label">关闭启动暗号</view>
           <view class="asset-right">
             <view class="chevron">›</view>
           </view>

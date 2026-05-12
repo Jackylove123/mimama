@@ -28,6 +28,7 @@ const COOLDOWN_MS = 30 * 1000
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const SESSION_BACKGROUND_TIMEOUT_MS = 90 * 1000
 const RECYCLE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+const INTERNAL_DEFAULT_PASSCODE = '__mimama_passcode_disabled_v1__'
 const MAX_CUSTOM_CATEGORY_COUNT = 10
 const SYSTEM_CATEGORY_ORDER: SystemVaultCategory[] = ['social', 'email', 'finance', 'website', 'others']
 const SYSTEM_CATEGORY_ALIAS: Record<string, SystemVaultCategory> = {
@@ -57,6 +58,7 @@ let sessionState: SessionState | null = null
 
 interface RuntimeConfig {
   initialized: boolean
+  passcodeEnabled: boolean
   guideSeen: boolean
   uiDensity: 'standard' | 'compact'
   lastAdCooldownAt: number
@@ -78,6 +80,16 @@ export interface PasscodeVerifyResult {
 }
 
 class VaultRepository {
+  isPasscodeEnabledSync() {
+    const config = readConfig()
+    return resolvePasscodeEnabled(config)
+  }
+
+  async isPasscodeEnabled() {
+    const config = readConfig()
+    return resolvePasscodeEnabled(config)
+  }
+
   async isInitialized() {
     // Use both config flag and file probing to avoid false negatives after app restarts.
     const config = readConfig()
@@ -89,6 +101,62 @@ class VaultRepository {
   }
 
   async initialize(passcode: string) {
+    this.initializeVault(passcode, true)
+  }
+
+  ensureInitializedWithoutPasscodeSync() {
+    this.ensureInitializedSync()
+  }
+
+  async enablePasscode(newPasscode: string) {
+    this.ensureInitializedSync()
+    const config = readConfig()
+    if (resolvePasscodeEnabled(config)) {
+      return false
+    }
+
+    const changed = await this.changePasscode(INTERNAL_DEFAULT_PASSCODE, newPasscode)
+    if (!changed) {
+      return false
+    }
+
+    writeConfig({
+      ...readConfig(),
+      initialized: true,
+      passcodeEnabled: true,
+      failCount: 0,
+      lockUntil: 0,
+      lastHideAt: 0,
+    })
+
+    return true
+  }
+
+  async disablePasscode(currentPasscode: string) {
+    this.ensureInitializedSync()
+    const config = readConfig()
+    if (!resolvePasscodeEnabled(config)) {
+      return true
+    }
+
+    const changed = await this.changePasscode(currentPasscode, INTERNAL_DEFAULT_PASSCODE)
+    if (!changed) {
+      return false
+    }
+
+    writeConfig({
+      ...readConfig(),
+      initialized: true,
+      passcodeEnabled: false,
+      failCount: 0,
+      lockUntil: 0,
+      lastHideAt: 0,
+    })
+
+    return true
+  }
+
+  private initializeVault(passcode: string, passcodeEnabled: boolean) {
     ensureRootDir()
 
     const salt = createRandomHex(16)
@@ -117,11 +185,13 @@ class VaultRepository {
       throw new Error('Vault initialization failed: data files were not persisted.')
     }
 
-    const nextConfig = {
+    const nextConfig: RuntimeConfig = {
       ...readConfig(),
       initialized: true,
+      passcodeEnabled,
       failCount: 0,
       lockUntil: 0,
+      lastHideAt: 0,
     }
     writeConfig(nextConfig)
     sessionState = {
@@ -131,6 +201,8 @@ class VaultRepository {
   }
 
   async verifyPasscode(passcode: string): Promise<PasscodeVerifyResult> {
+    this.ensureInitializedSync()
+
     if (!(await this.isInitialized())) {
       return {
         ok: false,
@@ -222,6 +294,22 @@ class VaultRepository {
   }
 
   needsUnlock() {
+    this.ensureInitializedSync()
+    const config = readConfig()
+    const passcodeEnabled = resolvePasscodeEnabled(config)
+    if (!passcodeEnabled) {
+      if (!sessionState) {
+        return !this.tryUnlockWithPasscode(INTERNAL_DEFAULT_PASSCODE)
+      }
+
+      if (Date.now() - sessionState.unlockedAt > SESSION_MAX_AGE_MS) {
+        this.lockSession()
+        return !this.tryUnlockWithPasscode(INTERNAL_DEFAULT_PASSCODE)
+      }
+
+      return false
+    }
+
     if (!sessionState) {
       return true
     }
@@ -248,7 +336,7 @@ class VaultRepository {
       return
     }
 
-    if (Date.now() - config.lastHideAt > SESSION_BACKGROUND_TIMEOUT_MS) {
+    if (resolvePasscodeEnabled(config) && Date.now() - config.lastHideAt > SESSION_BACKGROUND_TIMEOUT_MS) {
       this.lockSession()
     }
 
@@ -259,6 +347,10 @@ class VaultRepository {
   }
 
   lockCountdownSeconds() {
+    if (!this.isPasscodeEnabledSync()) {
+      return 0
+    }
+
     const config = readConfig()
     const left = config.lockUntil - Date.now()
     return left > 0 ? Math.ceil(left / 1000) : 0
@@ -881,9 +973,11 @@ class VaultRepository {
   }
 
   async getStatus(): Promise<VaultStatus> {
+    const passcodeEnabled = this.isPasscodeEnabledSync()
     if (!(await this.isInitialized())) {
       return {
         initialized: false,
+        passcodeEnabled,
         recordCount: 0,
         recycleCount: 0,
         lastBackupAt: 0,
@@ -906,6 +1000,7 @@ class VaultRepository {
 
     return {
       initialized: true,
+      passcodeEnabled,
       recordCount,
       recycleCount,
       lastBackupAt: meta.lastBackupAt,
@@ -928,6 +1023,7 @@ class VaultRepository {
     }
 
     writeConfig(defaultConfig())
+    this.ensureInitializedSync()
   }
 
   async changePasscode(oldPasscode: string, newPasscode: string) {
@@ -966,6 +1062,7 @@ class VaultRepository {
   }
 
   private readVaultWithSession() {
+    this.ensureInitializedSync()
     if (this.needsUnlock() || !sessionState) {
       throw new Error('Vault is locked. Please unlock first.')
     }
@@ -975,6 +1072,7 @@ class VaultRepository {
   }
 
   private saveVault(vault: VaultContainer, modifiedAt: number) {
+    this.ensureInitializedSync()
     if (this.needsUnlock() || !sessionState) {
       throw new Error('Vault is locked. Please unlock first.')
     }
@@ -1070,6 +1168,43 @@ class VaultRepository {
     this.saveVault(nextVault, modifiedAt)
     return { vault: nextVault, changed: true }
   }
+
+  private ensureInitializedSync() {
+    const hasDataFile = fileExists(VAULT_DATA_PATH)
+    const hasMetaFile = fileExists(VAULT_META_PATH)
+    if (!hasDataFile || !hasMetaFile) {
+      this.initializeVault(INTERNAL_DEFAULT_PASSCODE, false)
+      return
+    }
+
+    const config = readConfig()
+    if (!config.initialized) {
+      writeConfig({
+        ...config,
+        initialized: true,
+        passcodeEnabled: true,
+      })
+    }
+  }
+
+  private tryUnlockWithPasscode(passcode: string) {
+    try {
+      const meta = readMeta()
+      const key = deriveKey(passcode, meta.salt)
+      const expected = hashText(`${key}:verify`)
+      if (meta.passcodeVerifier !== expected) {
+        return false
+      }
+
+      sessionState = {
+        key,
+        unlockedAt: Date.now(),
+      }
+      return true
+    } catch (_error) {
+      return false
+    }
+  }
 }
 
 const repository = new VaultRepository()
@@ -1079,6 +1214,7 @@ export const getVaultRepository = () => repository
 const defaultConfig = (): RuntimeConfig => {
   return {
     initialized: false,
+    passcodeEnabled: false,
     guideSeen: false,
     uiDensity: 'standard',
     lastAdCooldownAt: 0,
@@ -1099,13 +1235,23 @@ const readConfig = () => {
 
   try {
     const parsed = JSON.parse(raw) as Partial<RuntimeConfig>
-    return {
+    const hasExplicitPasscodeFlag = typeof parsed.passcodeEnabled === 'boolean'
+    const nextConfig = {
       ...defaultConfig(),
       ...parsed,
     }
+    nextConfig.passcodeEnabled = hasExplicitPasscodeFlag ? !!parsed.passcodeEnabled : !!nextConfig.initialized
+    return nextConfig
   } catch (_error) {
     return defaultConfig()
   }
+}
+
+const resolvePasscodeEnabled = (config: Partial<RuntimeConfig>, fallback = false): boolean => {
+  if (typeof config.passcodeEnabled === 'boolean') {
+    return config.passcodeEnabled
+  }
+  return fallback
 }
 
 const writeConfig = (config: RuntimeConfig) => {

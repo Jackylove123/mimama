@@ -10,7 +10,7 @@ const DRAG_FOLLOW_FACTOR = 0.84
 const DRAG_OVERFLOW_FACTOR = 0.36
 const MAX_CUSTOM_CATEGORY_COUNT = 10
 const SHARE_TITLE = '密麻麻｜本地密码管理工具'
-const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
+const SHARE_PATH = '/pages/vault/index'
 const SHARE_IMAGE = '/assets/mimama-share.png'
 const CATEGORY_RECOMMEND_TRIGGER_COUNTS = [1, 3, 6, 10]
 

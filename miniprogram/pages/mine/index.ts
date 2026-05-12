@@ -1,9 +1,9 @@
 import { getVaultRepository } from '../../services/vault-repository'
-import { clearSession, lockCountdownSeconds, verifyPin } from '../../services/security'
+import { clearSession, disablePasscode, isPasscodeEnabledSync, lockCountdownSeconds, verifyPin } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { isTimelineSinglePageMode } from '../../utils/timeline-mode'
 
-type SensitiveAction = 'import' | 'export' | 'wipe' | ''
+type SensitiveAction = 'import' | 'export' | 'wipe' | 'disable_passcode' | ''
 type DialogState = {
   visible: boolean
   title: string
@@ -41,7 +41,7 @@ interface ShareAppMessageContent {
 
 const repository = getVaultRepository()
 const SHARE_TITLE = '密麻麻｜本地密码管理工具'
-const SHARE_PATH = '/pages/pin/index?redirect=%2Fpages%2Fvault%2Findex'
+const SHARE_PATH = '/pages/vault/index'
 const SHARE_IMAGE = '/assets/mimama-share.png'
 
 let lockTimer: number | undefined
@@ -77,6 +77,8 @@ Page({
     ],
     dialog: createDialogState(),
     feedbackActive: false,
+    passcodeEnabled: false,
+    passcodeEntryLabel: '设置启动暗号',
     navHeightPx: 32,
     pagePaddingTopPx: 88,
     mineScrollable: false,
@@ -136,7 +138,17 @@ Page({
     const pending = wx.getStorageSync('mimama.pendingAction')
     if (pending === 'export') {
       wx.removeStorageSync('mimama.pendingAction')
-      this.requestSensitive('export')
+      if (this.isPasscodeRequiredNow()) {
+        this.requestSensitive('export')
+      } else {
+        void this.runSensitiveAction('export').catch((error) => {
+          console.error('Failed to run export action on mine page:', error)
+          wx.showToast({
+            title: '操作失败，请重试',
+            icon: 'none',
+          })
+        })
+      }
     }
   },
 
@@ -156,8 +168,9 @@ Page({
   },
 
   onTapChangePasscode() {
+    const mode = this.data.passcodeEnabled ? 'change' : 'set'
     wx.navigateTo({
-      url: '/pages/passcode/index',
+      url: `/pages/passcode/index?mode=${mode}`,
     })
   },
 
@@ -191,6 +204,16 @@ Page({
   },
 
   onTapExport() {
+    if (!this.isPasscodeRequiredNow()) {
+      void this.runSensitiveAction('export').catch((error) => {
+        console.error('Failed to export without passcode:', error)
+        wx.showToast({
+          title: '导出失败，请重试',
+          icon: 'none',
+        })
+      })
+      return
+    }
     this.requestSensitive('export')
   },
 
@@ -198,6 +221,18 @@ Page({
     if (this.data.importing) {
       return
     }
+
+    if (!this.isPasscodeRequiredNow()) {
+      void this.runSensitiveAction('import').catch((error) => {
+        console.error('Failed to import without passcode:', error)
+        wx.showToast({
+          title: '导入失败，请重试',
+          icon: 'none',
+        })
+      })
+      return
+    }
+
     this.requestSensitive('import')
   },
 
@@ -216,6 +251,13 @@ Page({
     }
 
     this.requestSensitive('wipe')
+  },
+
+  onTapDisablePasscode() {
+    if (!this.isPasscodeRequiredNow()) {
+      return
+    }
+    this.requestSensitive('disable_passcode')
   },
 
   onTapPinClose() {
@@ -277,6 +319,17 @@ Page({
   },
 
   requestSensitive(action: SensitiveAction) {
+    if (!this.isPasscodeRequiredNow()) {
+      void this.runSensitiveAction(action).catch((error) => {
+        console.error('Failed to run sensitive action without passcode on mine page:', error)
+        wx.showToast({
+          title: '操作失败，请重试',
+          icon: 'none',
+        })
+      })
+      return
+    }
+
     this.setData({
       showPinSheet: true,
       pinDigits: '',
@@ -328,7 +381,7 @@ Page({
     })
   },
 
-  async runSensitiveAction(action: SensitiveAction, verifiedPin: string) {
+  async runSensitiveAction(action: SensitiveAction, verifiedPin = '') {
     if (action === 'import') {
       await this.importTxt(verifiedPin)
       return
@@ -341,10 +394,15 @@ Page({
 
     if (action === 'wipe') {
       await this.wipeAllData()
+      return
+    }
+
+    if (action === 'disable_passcode') {
+      await this.disablePasscodeWithPin(verifiedPin)
     }
   },
 
-  async importTxt(verifiedPin: string) {
+  async importTxt(verifiedPin?: string) {
     if (this.data.importing) {
       return
     }
@@ -357,13 +415,15 @@ Page({
         return
       }
 
-      const recheck = await verifyPin(verifiedPin)
-      if (recheck.code !== 'OK') {
-        wx.showToast({
-          title: '暗号状态失效，请重试导入',
-          icon: 'none',
-        })
-        return
+      if (this.isPasscodeRequiredNow()) {
+        const recheck = await verifyPin(verifiedPin || '')
+        if (recheck.code !== 'OK') {
+          wx.showToast({
+            title: '暗号状态失效，请重试导入',
+            icon: 'none',
+          })
+          return
+        }
       }
 
       const result = await repository.importTxt(picked.path)
@@ -472,22 +532,57 @@ Page({
     })
 
     wx.reLaunch({
-      url: '/pages/pin/index',
+      url: '/pages/vault/index',
     })
   },
 
   async loadStatus() {
     const status = await repository.getStatus()
+    const passcodeEnabled = !!status.passcodeEnabled
 
     this.setData(
       {
         recordCount: status.recordCount,
         recycleCount: status.recycleCount,
+        passcodeEnabled,
+        passcodeEntryLabel: passcodeEnabled ? '重置启动暗号' : '设置启动暗号',
       },
       () => {
         this.scheduleScrollabilityCheck()
       },
     )
+  },
+
+  async disablePasscodeWithPin(verifiedPin: string) {
+    if (!this.isPasscodeRequiredNow()) {
+      return
+    }
+
+    const confirmed = await this.openDialog({
+      title: '关闭启动暗号？',
+      content: '关闭后，下次打开无需暗号即可进入。你可以随时再次设置。',
+      confirmText: '确认关闭',
+      danger: true,
+    })
+    if (!confirmed) {
+      return
+    }
+
+    const disabled = await disablePasscode(verifiedPin)
+    if (!disabled) {
+      wx.showToast({
+        title: '暗号校验失败，请重试',
+        icon: 'none',
+      })
+      return
+    }
+
+    wx.showToast({
+      title: '已关闭启动暗号',
+      icon: 'success',
+    })
+    await this.loadStatus()
+    this.refreshCooldown()
   },
 
   refreshCooldown() {
@@ -602,6 +697,10 @@ Page({
         }
       })
     }, 48)
+  },
+
+  isPasscodeRequiredNow() {
+    return this.data.passcodeEnabled || isPasscodeEnabledSync()
   },
 })
 

@@ -1,9 +1,10 @@
-import { changePasscode, lockCountdownSeconds, validatePinFormat, verifyPin } from '../../services/security'
+import { changePasscode, enablePasscode, isPasscodeEnabled, lockCountdownSeconds, validatePinFormat, verifyPin } from '../../services/security'
 
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
 
 type Stage = 'verify_old' | 'new_first' | 'new_confirm'
+type PasscodeMode = 'set' | 'change'
 type DialogState = {
   visible: boolean
   title: string
@@ -26,6 +27,7 @@ const createDialogState = (): DialogState => ({
 
 Page({
   data: {
+    mode: 'change' as PasscodeMode,
     stage: 'verify_old' as Stage,
     title: '先对旧暗号',
     tips: '输入当前暗号',
@@ -41,6 +43,14 @@ Page({
     ],
     cooldownSeconds: 0,
     dialog: createDialogState(),
+  },
+
+  async onLoad(options) {
+    const rawMode = typeof options.mode === 'string' ? options.mode : ''
+    const mode: PasscodeMode = rawMode === 'set' ? 'set' : 'change'
+    const enabled = await isPasscodeEnabled()
+    const effectiveMode: PasscodeMode = mode === 'set' || !enabled ? 'set' : 'change'
+    this.applyMode(effectiveMode)
   },
 
   onShow() {
@@ -124,7 +134,7 @@ Page({
 
       this.setData({
         stage: 'new_confirm',
-        title: '再对一次新暗号',
+        title: this.data.mode === 'set' ? '再对一次暗号' : '再对一次新暗号',
         tips: '两次一致后，开始本地加密保存。',
         digits: '',
         firstNewPin: pin,
@@ -142,12 +152,28 @@ Page({
     if (pin !== this.data.firstNewPin) {
       this.setData({
         stage: 'new_first',
-        title: '设一个新暗号',
-        tips: '两次不一致，请重新设一个新暗号。',
+        title: this.data.mode === 'set' ? '设一个启动暗号' : '设一个新暗号',
+        tips: this.data.mode === 'set' ? '两次不一致，请重新设一个启动暗号。' : '两次不一致，请重新设一个新暗号。',
         digits: '',
         firstNewPin: '',
       })
       wx.showToast({ title: '两次不一致，请重设', icon: 'none' })
+      return
+    }
+
+    if (this.data.mode === 'set') {
+      const enabled = await enablePasscode(pin)
+      if (!enabled) {
+        wx.showToast({ title: '设置失败，请重试', icon: 'none' })
+        return
+      }
+
+      wx.showToast({
+        title: '启动暗号已生效',
+        icon: 'success',
+      })
+
+      wx.navigateBack()
       return
     }
 
@@ -218,10 +244,41 @@ Page({
   onResetNewFirstRound() {
     this.setData({
       stage: 'new_first',
-      title: '设一个新暗号',
-      tips: '设 6 位数字新暗号，用它打开密麻麻。',
+      title: this.data.mode === 'set' ? '设一个启动暗号' : '设一个新暗号',
+      tips: this.data.mode === 'set' ? '设 6 位数字暗号，用它保护本地数据。' : '设 6 位数字新暗号，用它打开密麻麻。',
       digits: '',
       firstNewPin: '',
+    })
+  },
+
+  applyMode(mode: PasscodeMode) {
+    if (mode === 'set') {
+      wx.setNavigationBarTitle({
+        title: '设置启动暗号',
+      })
+      this.setData({
+        mode,
+        stage: 'new_first',
+        title: '设一个启动暗号',
+        tips: '设 6 位数字暗号，用它保护本地数据。',
+        digits: '',
+        firstNewPin: '',
+        oldPin: '',
+      })
+      return
+    }
+
+    wx.setNavigationBarTitle({
+      title: '修改启动暗号',
+    })
+    this.setData({
+      mode,
+      stage: 'verify_old',
+      title: '先对旧暗号',
+      tips: '输入当前暗号',
+      digits: '',
+      firstNewPin: '',
+      oldPin: '',
     })
   },
 

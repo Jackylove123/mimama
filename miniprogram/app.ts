@@ -1,5 +1,5 @@
 import { PRODUCT_POSITIONING } from './services/runtime-config'
-import { onAppHide, onAppShow } from './services/security'
+import { ensureVaultReady, onAppHide, onAppShow } from './services/security'
 
 App<IAppOption>({
   globalData: {
@@ -7,10 +7,12 @@ App<IAppOption>({
   },
 
   onLaunch() {
+    ensureVaultReady()
     onAppShow()
   },
 
   onShow() {
+    ensureVaultReady()
     onAppShow()
   },
 

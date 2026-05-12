@@ -146,6 +146,30 @@
   font-size: 25rpx;
 }
 
+.passcode-hint {
+  margin-top: 12rpx;
+  border-radius: 14rpx;
+  padding: 12rpx 16rpx;
+  background: rgba(255, 214, 10, 0.16);
+  border: 1rpx solid rgba(255, 214, 10, 0.28);
+  display: flex;
+  align-items: center;
+}
+
+.passcode-hint-text {
+  flex: 1;
+  color: #ffefb0;
+  font-size: 23rpx;
+  line-height: 1.4;
+}
+
+.passcode-hint-action {
+  margin-left: 16rpx;
+  color: #fff5cc;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
 .reminder {
   margin-top: 14rpx;
   border-radius: 14rpx;
