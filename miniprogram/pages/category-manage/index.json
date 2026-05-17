@@ -2,8 +2,6 @@
   "navigationBarTitleText": "分类管理",
   "navigationBarTextStyle": "white",
   "navigationBarBackgroundColor": "#1C1C1E",
-  "enableShareAppMessage": true,
-  "enableShareTimeline": true,
   "usingComponents": {
     "timeline-landing": "/components/timeline-landing/index"
   }

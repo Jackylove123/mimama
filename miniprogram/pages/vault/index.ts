@@ -331,7 +331,6 @@ Page({
   },
 
   onTapBackup() {
-    wx.setStorageSync('mimama.pendingAction', 'export')
     wx.switchTab({
       url: '/pages/mine/index',
     })

@@ -1,5 +1,6 @@
 import { PRODUCT_POSITIONING } from './services/runtime-config'
 import { ensureVaultReady, onAppHide, onAppShow } from './services/security'
+import { prefetchOpenid } from './services/crypto'
 
 App<IAppOption>({
   globalData: {
@@ -7,8 +8,10 @@ App<IAppOption>({
   },
 
   onLaunch() {
+    wx.cloud.init({ env: 'cloud1-d3goszbjj907b84c1' })
     ensureVaultReady()
     onAppShow()
+    void prefetchOpenid()
   },
 
   onShow() {

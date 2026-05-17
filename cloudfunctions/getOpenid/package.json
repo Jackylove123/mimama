@@ -1,0 +1,10 @@
+{
+  "name": "getOpenid",
+  "version": "1.0.0",
+  "description": "Return the user's wechat openid",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest",
+    "protobufjs": "^7.0.0"
+  }
+}

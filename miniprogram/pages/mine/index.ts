@@ -2,8 +2,11 @@ import { getVaultRepository } from '../../services/vault-repository'
 import { clearSession, disablePasscode, isPasscodeEnabledSync, lockCountdownSeconds, verifyPin } from '../../services/security'
 import { ensureUnlocked } from '../../utils/auth-guard'
 import { isTimelineSinglePageMode } from '../../utils/timeline-mode'
+import { getOpenid, encryptBackup, formatEncryptedBackup, decryptBackup, parseEncryptedBackupV2, isBackupV2 } from '../../services/crypto'
+import { generateBackupPdf, PdfSection } from '../../services/pdf-generator'
+import { getCategoryLabel } from '../../services/category-engine'
 
-type SensitiveAction = 'import' | 'export' | 'wipe' | 'disable_passcode' | ''
+type SensitiveAction = 'wipe' | 'disable_passcode' | ''
 type DialogState = {
   visible: boolean
   title: string
@@ -47,6 +50,16 @@ const SHARE_IMAGE = '/assets/mimama-share.png'
 let lockTimer: number | undefined
 let dialogResolver: ((confirmed: boolean) => void) | undefined
 let scrollabilityTimer: number | undefined
+let pendingShareFilePath = ''
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+async function finishLoading(startTime: number, minMs: number) {
+  const elapsed = Date.now() - startTime
+  if (elapsed < minMs) {
+    await sleep(minMs - elapsed)
+  }
+}
 
 const createDialogState = (): DialogState => ({
   visible: false,
@@ -63,7 +76,6 @@ Page({
   data: {
     recordCount: 0,
     recycleCount: 0,
-    importing: false,
     showPinSheet: false,
     pinDigits: '',
     pendingAction: '' as SensitiveAction,
@@ -83,6 +95,8 @@ Page({
     pagePaddingTopPx: 88,
     mineScrollable: false,
     singlePageMode: false,
+    importLoading: false,
+    importStatus: '' as '' | 'loading' | 'success' | 'fail',
   },
 
   onLoad() {
@@ -134,22 +148,6 @@ Page({
     this.refreshCooldown()
     void this.loadStatus()
     this.scheduleScrollabilityCheck()
-
-    const pending = wx.getStorageSync('mimama.pendingAction')
-    if (pending === 'export') {
-      wx.removeStorageSync('mimama.pendingAction')
-      if (this.isPasscodeRequiredNow()) {
-        this.requestSensitive('export')
-      } else {
-        void this.runSensitiveAction('export').catch((error) => {
-          console.error('Failed to run export action on mine page:', error)
-          wx.showToast({
-            title: '操作失败，请重试',
-            icon: 'none',
-          })
-        })
-      }
-    }
   },
 
   onUnload() {
@@ -203,37 +201,201 @@ Page({
     this.setData({ feedbackActive: false })
   },
 
-  onTapExport() {
-    if (!this.isPasscodeRequiredNow()) {
-      void this.runSensitiveAction('export').catch((error) => {
-        console.error('Failed to export without passcode:', error)
-        wx.showToast({
-          title: '导出失败，请重试',
-          icon: 'none',
-        })
+  async onTapExport() {
+    wx.showLoading({ title: '正在导出...', mask: true })
+
+    try {
+      const openid = await getOpenid()
+      const result = await repository.exportTxt()
+      const encrypted = await encryptBackup(result.txt, openid)
+      const encryptedText = formatEncryptedBackup(encrypted)
+
+      const fs = wx.getFileSystemManager()
+      const filePath = `${wx.env.USER_DATA_PATH}/backup-${Date.now()}.mmbak`
+      fs.writeFileSync(filePath, encryptedText, 'utf8')
+
+      wx.hideLoading()
+
+      pendingShareFilePath = filePath
+      void this.openDialog({
+        title: '导出完成',
+        content: '请导出到自己的微信小号或文件助手',
+        confirmText: '分享',
+        cancelText: '稍后',
+      }).then((confirmed) => {
+        if (!confirmed) {
+          pendingShareFilePath = ''
+          wx.showToast({ title: '已取消导出', icon: 'none', duration: 2000 })
+        }
       })
-      return
+    } catch (error) {
+      wx.hideLoading()
+      console.error('Export failed:', error)
+      wx.showToast({ title: '导出失败，请重试', icon: 'none' })
     }
-    this.requestSensitive('export')
+  },
+
+  async onTapExportPlain() {
+    wx.showLoading({ title: '生成PDF中...', mask: true })
+
+    try {
+      const [items, categories] = await Promise.all([
+        repository.searchItems('', 'all'),
+        repository.listCategories(),
+      ])
+
+      if (items.length === 0) {
+        wx.hideLoading()
+        wx.showToast({ title: '暂无记录可导出', icon: 'none' })
+        return
+      }
+
+      const labelMap: Record<string, string> = {}
+      categories.forEach((cat) => {
+        labelMap[cat.id || cat.key] = cat.label
+      })
+
+      // Keep user's category order
+      const catOrder = categories.map((c) => c.id || c.key)
+      const grouped: Record<string, PdfSection> = {}
+
+      for (const item of items) {
+        const catId = item.categoryId || 'others'
+        if (!grouped[catId]) {
+          grouped[catId] = {
+            categoryLabel: getCategoryLabel(catId, labelMap),
+            entries: [],
+          }
+        }
+        grouped[catId].entries.push({
+          title: item.title,
+          account: item.account,
+          password: item.password,
+          note: item.note || undefined,
+        })
+      }
+
+      // Build ordered sections
+      const sections: PdfSection[] = []
+      for (const catId of catOrder) {
+        if (grouped[catId] && grouped[catId].entries.length > 0) {
+          sections.push(grouped[catId])
+        }
+      }
+      // Include any items whose category wasn't in the user's category list
+      for (const catId of Object.keys(grouped)) {
+        if (!catOrder.includes(catId) && grouped[catId].entries.length > 0) {
+          sections.push(grouped[catId])
+        }
+      }
+
+      const pdfPath = await generateBackupPdf(sections)
+
+      wx.hideLoading()
+
+      pendingShareFilePath = pdfPath
+      void this.openDialog({
+        title: '导出完成',
+        content: '请导出到自己的微信小号或文件助手',
+        confirmText: '分享',
+        cancelText: '稍后',
+      }).then((confirmed) => {
+        if (!confirmed) {
+          pendingShareFilePath = ''
+          wx.showToast({ title: '已取消导出', icon: 'none', duration: 2000 })
+        }
+      })
+    } catch (error) {
+      wx.hideLoading()
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('Plain export failed:', error)
+      wx.showToast({ title: message || '导出失败，请重试', icon: 'none', duration: 3000 })
+    }
   },
 
   async onTapImport() {
-    if (this.data.importing) {
+    if (this.data.importLoading) {
       return
     }
 
-    if (!this.isPasscodeRequiredNow()) {
-      void this.runSensitiveAction('import').catch((error) => {
-        console.error('Failed to import without passcode:', error)
-        wx.showToast({
-          title: '导入失败，请重试',
-          icon: 'none',
-        })
+    let content = ''
+
+    try {
+      const picked = await pickBackupFile()
+      if (!picked) {
+        return
+      }
+
+      const fs = wx.getFileSystemManager()
+      const fileContent = fs.readFileSync(picked.path, 'utf8')
+      content = typeof fileContent === 'string' ? fileContent : ''
+
+      if (!content) {
+        wx.showToast({ title: '备份文件为空', icon: 'none' })
+        return
+      }
+
+      if (!isBackupV2(content)) {
+        wx.showToast({ title: '请选择加密备份文件', icon: 'none' })
+        return
+      }
+    } catch (error) {
+      const errMsg = (error as { errMsg?: string }).errMsg || ''
+      wx.showToast({
+        title: errMsg.includes('cancel') ? '已取消选择' : '选择文件失败',
+        icon: 'none',
       })
       return
     }
 
-    this.requestSensitive('import')
+    // Show loading overlay
+    this.setData({ importLoading: true, importStatus: 'loading' })
+
+    const MIN_LOADING_MS = 1000
+    const startTime = Date.now()
+
+    try {
+      const openid = await getOpenid()
+      const encrypted = parseEncryptedBackupV2(content)
+      if (!encrypted) {
+        throw new Error('无法解析备份文件')
+      }
+
+      const decryptResult = await decryptBackup(encrypted, openid)
+
+      if (!decryptResult.success || !decryptResult.data) {
+        await finishLoading(startTime, MIN_LOADING_MS)
+        this.setData({ importStatus: 'fail' })
+        setTimeout(() => {
+          this.setData({ importLoading: false, importStatus: '' })
+        }, 1800)
+        return
+      }
+
+      const fs = wx.getFileSystemManager()
+      const tempPath = `${wx.env.USER_DATA_PATH}/temp-import-${Date.now()}.txt`
+      fs.writeFileSync(tempPath, decryptResult.data, 'utf8')
+
+      const importResult = await repository.importTxt(tempPath)
+
+      await finishLoading(startTime, MIN_LOADING_MS)
+
+      this.setData({ importLoading: false, importStatus: '' })
+      void this.openDialog({
+        title: '导入完成',
+        content: `共识别 ${importResult.totalCount} 条，新增 ${importResult.importedCount} 条，重复 ${importResult.duplicateCount} 条，跳过 ${importResult.skippedCount} 条。`,
+        showCancel: false,
+        confirmText: '我知道了',
+      })
+      this.loadStatus()
+    } catch (error) {
+      console.error('Import failed:', error)
+      await finishLoading(startTime, MIN_LOADING_MS)
+      this.setData({ importStatus: 'fail' })
+      setTimeout(() => {
+        this.setData({ importLoading: false, importStatus: '' })
+      }, 1800)
+    }
   },
 
   async onTapWipe() {
@@ -382,16 +544,6 @@ Page({
   },
 
   async runSensitiveAction(action: SensitiveAction, verifiedPin = '') {
-    if (action === 'import') {
-      await this.importTxt(verifiedPin)
-      return
-    }
-
-    if (action === 'export') {
-      await this.exportTxt()
-      return
-    }
-
     if (action === 'wipe') {
       await this.wipeAllData()
       return
@@ -400,98 +552,6 @@ Page({
     if (action === 'disable_passcode') {
       await this.disablePasscodeWithPin(verifiedPin)
     }
-  },
-
-  async importTxt(verifiedPin?: string) {
-    if (this.data.importing) {
-      return
-    }
-
-    this.setData({ importing: true })
-
-    try {
-      const picked = await pickBackupFile()
-      if (!picked) {
-        return
-      }
-
-      if (this.isPasscodeRequiredNow()) {
-        const recheck = await verifyPin(verifiedPin || '')
-        if (recheck.code !== 'OK') {
-          wx.showToast({
-            title: '暗号状态失效，请重试导入',
-            icon: 'none',
-          })
-          return
-        }
-      }
-
-      const result = await repository.importTxt(picked.path)
-      await this.openDialog({
-        title: '导入完成',
-        content: `共识别 ${result.totalCount} 条，新增 ${result.importedCount} 条，重复 ${result.duplicateCount} 条，跳过 ${result.skippedCount} 条。`,
-        showCancel: false,
-        confirmText: '我知道了',
-      })
-
-      this.loadStatus()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : ''
-      const errMsg = (error as { errMsg?: string }).errMsg || ''
-      if (message === 'INVALID_IMPORT_TXT') {
-        wx.showToast({
-          title: '备份文件无效或已损坏',
-          icon: 'none',
-        })
-        return
-      }
-
-      if (message.includes('Vault is locked')) {
-        wx.showToast({
-          title: '导入前会话已锁定，请重试',
-          icon: 'none',
-        })
-        return
-      }
-
-      console.error('Import txt failed:', error)
-      wx.showToast({
-        title: errMsg.includes('cancel') ? '已取消选择' : '导入失败，请重试',
-        icon: 'none',
-      })
-    } finally {
-      this.setData({ importing: false })
-    }
-  },
-
-  async exportTxt() {
-    const result = await repository.exportTxt()
-    const shareResult = await this.tryShareBackupFile(result.filePath)
-
-    if (shareResult === 'shared') {
-      await this.openDialog({
-        title: '导出完成',
-        content: '备份已加密，请妥善保管。',
-        showCancel: false,
-        confirmText: '我知道了',
-      })
-    } else if (shareResult === 'cancelled') {
-      await this.openDialog({
-        title: '已取消分享',
-        content: '备份文件已生成，但你已取消分享。',
-        showCancel: false,
-        confirmText: '我知道了',
-      })
-    } else {
-      await this.openDialog({
-        title: '导出完成',
-        content: '备份文件已生成并加密，请妥善保管。',
-        showCancel: false,
-        confirmText: '我知道了',
-      })
-    }
-
-    this.loadStatus()
   },
 
   tryShareBackupFile(filePath: string) {
@@ -627,6 +687,21 @@ Page({
   },
 
   onDialogConfirm() {
+    if (pendingShareFilePath) {
+      const path = pendingShareFilePath
+      pendingShareFilePath = ''
+      this.closeDialog(true)
+      void this.tryShareBackupFile(path).then((result) => {
+        if (result === 'shared') {
+          wx.showToast({ title: '已分享', icon: 'success', duration: 2000 })
+        } else if (result === 'cancelled') {
+          wx.showToast({ title: '已取消分享', icon: 'none', duration: 2000 })
+        } else {
+          wx.showToast({ title: '文件已生成', icon: 'none', duration: 2000 })
+        }
+      })
+      return
+    }
     this.closeDialog(true)
   },
 

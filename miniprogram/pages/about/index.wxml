@@ -14,7 +14,7 @@
     <view class="entry-row entry-row-divider">
       <view class="entry-title">版本信息</view>
       <view class="entry-value-wrap">
-        <view class="entry-value">V 1.2</view>
+        <view class="entry-value">V 1.5</view>
       </view>
     </view>
   </view>

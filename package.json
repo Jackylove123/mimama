@@ -11,6 +11,7 @@
   "author": "",
   "license": "",
   "dependencies": {
+    "pako": "^2.1.0"
   },
   "devDependencies": {
     "miniprogram-api-typings": "^2.8.3-1"

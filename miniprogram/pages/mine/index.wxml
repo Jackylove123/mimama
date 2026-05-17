@@ -53,14 +53,16 @@
       <view class="card backup-card">
         <view class="asset-row layer-a">
           <view class="asset-label">导入备份</view>
-          <view class="import-btn" bindtap="onTapImport" hover-class="{{importing ? '' : 'pressable-active'}}" hover-start-time="0" hover-stay-time="28">
-            {{importing ? '导入中' : '导入'}}
-          </view>
+          <view class="import-btn" bindtap="onTapImport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导入</view>
         </view>
         <view class="import-hint">使用备份档案，一键恢复记录。</view>
         <view class="asset-row layer-a">
-          <view class="asset-label">导出备份</view>
+          <view class="asset-label">导出加密备份</view>
           <view class="export-btn" bindtap="onTapExport" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
+        </view>
+        <view class="asset-row layer-b">
+          <view class="asset-label">导出明文备份</view>
+          <view class="export-plain-btn" bindtap="onTapExportPlain" hover-class="pressable-active" hover-start-time="0" hover-stay-time="28">导出</view>
         </view>
         <view class="export-hint">
           密麻麻为纯本地存储。受限于小程序系统清理机制，卸载、更换设备或微信清理可能导致数据永久丢失。请务必定期导出备份文件并妥善保存，这是找回记录的唯一途径。
@@ -116,6 +118,19 @@
             <text wx:elif="{{item}}">{{item}}</text>
           </view>
         </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{importLoading}}" class="import-overlay">
+    <view class="import-modal">
+      <view wx:if="{{importStatus === 'loading'}}" class="import-spinner"></view>
+      <text wx:elif="{{importStatus === 'success'}}" class="import-check">OK</text>
+      <text wx:else class="import-cross">X</text>
+      <view class="import-text">
+        <block wx:if="{{importStatus === 'loading'}}">正在解析并导入</block>
+        <block wx:elif="{{importStatus === 'success'}}">导入成功</block>
+        <block wx:else>此备份不属于你，无法导入</block>
       </view>
     </view>
   </view>
